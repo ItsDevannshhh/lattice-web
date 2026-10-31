@@ -35,12 +35,24 @@ describe('generateCandidates', () => {
     )
   })
 
-  it('generates different results for different seeds', () => {
+  it('replays real solver output: ids are re-keyed to the job, numbers are the stored ones', () => {
     const a = generateCandidates('j_abc', MOCK_REQUEST, 'happy')
     const b = generateCandidates('j_xyz', MOCK_REQUEST, 'happy')
-    const aMasses = a.map((c) => c.mass_g)
-    const bMasses = b.map((c) => c.mass_g)
-    expect(aMasses).not.toEqual(bMasses)
+    expect(a.every((c) => c.id.startsWith('j_abc_d_'))).toBe(true)
+    expect(a.map((c) => c.verified)).toEqual(b.map((c) => c.verified))
+    expect(a.every((c) => c.mass_g > 0 && typeof c.matches_targets === 'boolean')).toBe(true)
+  })
+
+  it('the no_match scenario replays a real search that missed: not a match, with a shortfall', () => {
+    const c = generateCandidates('j_nm', MOCK_REQUEST, 'no_match')
+    expect(c.length).toBeGreaterThan(0)
+    expect(c.every((x) => x.matches_targets === false)).toBe(true)
+  })
+
+  it('picks the stored search nearest to the request', () => {
+    const near = { ...MOCK_REQUEST, target: { stiffness_gpa: { x: 0.328, y: 0.351, z: 0.335 }, strength_mpa: { x: 3.83, y: 3.07, z: 3.45 }, max_mass_g: 14.5 } }
+    const c = generateCandidates('j_near', near as typeof MOCK_REQUEST, 'happy')
+    expect(c[0].rel_density).toBeCloseTo(0.05, 2)
   })
 
   it('candidates have monotonically increasing rank', () => {

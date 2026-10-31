@@ -18,7 +18,7 @@ import {
   getMockExportStl,
   getMockReport,
 } from '@/mocks/implantMock'
-import materialsFixture from '@/mocks/fixtures/materials.json'
+import materialsFixture from '@/mocks/fixtures/real/materials.json'
 
 /** Artificial latency in ms */
 const LATENCY_MIN = 200
@@ -98,9 +98,10 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
   if (method === 'get' && /\/api\/limits/.test(url)) {
     const params = config.params as Record<string, string> | undefined
     const materialId = params?.material ?? 'ti64'
-    const material = (materialsFixture as Array<{ id: string; E_gpa: number; yield_mpa: number }>)
-      .find((m) => m.id === materialId)
-    return makeResponse(mockLimits(material?.E_gpa ?? 114, material?.yield_mpa ?? 880))
+    if (!(materialsFixture as Array<{ id: string }>).some((m) => m.id === materialId)) {
+      makeErrorResponse(422, 'unknown_material', `unknown material '${materialId}'`)
+    }
+    return makeResponse(mockLimits())
   }
 
   // POST /api/reach
@@ -138,6 +139,20 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     }
 
     return makeResponse({ job_id: jobId }, 202)
+  }
+
+  // POST /api/jobs/:id/cancel
+  const cancelMatch = url.match(/\/api\/jobs\/([^/]+)\/cancel$/)
+  if (method === 'post' && cancelMatch) {
+    const jobId = cancelMatch[1]
+    const stored = getStoredJob(jobId)
+    try {
+      localStorage.setItem(`mock:job:${jobId}`, JSON.stringify({ ...stored, scenario: 'cancelled' }))
+    } catch {
+      // Ignore
+    }
+    await delay()
+    return makeResponse({ job_id: jobId, status: 'cancelled', message: 'Cancelled.' })
   }
 
   // GET /api/jobs/:id
