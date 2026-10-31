@@ -27,8 +27,8 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             className={cn(
               'border-line bg-surface text-text h-10 w-full rounded-md border px-3 text-sm',
               'placeholder:text-faint',
-              'transition-colors duration-150',
-              'focus:border-accent focus:ring-accent focus:ring-1 focus:outline-none',
+              'transition-[border-color,box-shadow] duration-200',
+              'hover:border-faint/60 focus:border-accent focus:ring-accent/40 focus:ring-4 focus:outline-none',
               'disabled:cursor-not-allowed disabled:opacity-50',
               suffix && 'pr-12',
               error && 'border-danger focus:border-danger focus:ring-danger',

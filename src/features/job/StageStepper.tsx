@@ -37,32 +37,28 @@ export function StageStepper({ currentStage, status }: StageStepperProps) {
             className="flex flex-1 items-start gap-3 md:flex-col md:items-center md:text-center"
           >
             <div className="flex items-center gap-2 md:w-full">
-              {i > 0 && (
-                <div
-                  className={cn(
-                    'hidden h-px flex-1 md:block',
-                    state === 'pending' ? 'bg-line' : 'bg-accent',
-                  )}
-                />
-              )}
               <div
                 className={cn(
-                  'flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 text-xs font-semibold transition-all',
+                  'hidden h-px flex-1 transition-colors duration-700 md:block',
+                  i === 0 ? 'bg-transparent' : state === 'pending' ? 'bg-line' : 'bg-accent',
+                )}
+              />
+              <div
+                className={cn(
+                  'flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 font-mono text-xs font-semibold transition-all duration-500',
                   state === 'done' && 'bg-accent border-accent text-accent-fg',
-                  state === 'active' && 'border-accent text-accent animate-pulse-dot',
+                  state === 'active' && 'border-accent bg-accent-soft text-accent animate-ring-pulse',
                   state === 'pending' && 'border-line text-faint',
                 )}
               >
                 {state === 'done' ? <Check className="h-4 w-4" /> : i + 1}
               </div>
-              {i < STAGES.length - 1 && (
-                <div
-                  className={cn(
-                    'hidden h-px flex-1 md:block',
-                    state === 'done' ? 'bg-accent' : 'bg-line',
-                  )}
-                />
-              )}
+              <div
+                className={cn(
+                  'hidden h-px flex-1 transition-colors duration-700 md:block',
+                  i === STAGES.length - 1 ? 'bg-transparent' : state === 'done' ? 'bg-accent' : 'bg-line',
+                )}
+              />
             </div>
             <div className="md:mt-2">
               <div className="flex items-center gap-1.5">

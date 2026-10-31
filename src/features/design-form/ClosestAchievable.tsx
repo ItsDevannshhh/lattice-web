@@ -75,9 +75,9 @@ export function ClosestAchievable({
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-0 sm:divide-x sm:divide-line">
         {/* Stiffness comparisons */}
-        <div>
+        <div className="sm:pr-4">
           <span className="font-medium text-muted">Stiffness (GPa):</span>
           <div className="mt-1 space-y-1">
             {AXES.map((axis, i) => {
@@ -88,7 +88,8 @@ export function ClosestAchievable({
                 <div key={axis} className="flex justify-between font-mono tabular-nums">
                   <span className="text-muted">{AXIS_LABELS[axis]}:</span>
                   <span>
-                    <span className="text-muted line-through mr-1.5">{req.toFixed(2)}</span>
+                    <span className="text-muted line-through">{req.toFixed(2)}</span>
+                    <span className="text-faint mx-1.5">&rarr;</span>
                     <span className="text-accent font-medium">{near.toFixed(2)}</span>
                   </span>
                 </div>
@@ -98,7 +99,7 @@ export function ClosestAchievable({
         </div>
 
         {/* Strength comparisons */}
-        <div>
+        <div className="sm:pl-4">
           <span className="font-medium text-muted">Strength (MPa):</span>
           <div className="mt-1 space-y-1">
             {AXES.map((axis, i) => {
@@ -109,7 +110,8 @@ export function ClosestAchievable({
                 <div key={axis} className="flex justify-between font-mono tabular-nums">
                   <span className="text-muted">{AXIS_LABELS[axis]}:</span>
                   <span>
-                    <span className="text-muted line-through mr-1.5">{req.toFixed(1)}</span>
+                    <span className="text-muted line-through">{req.toFixed(1)}</span>
+                    <span className="text-faint mx-1.5">&rarr;</span>
                     <span className="text-accent font-medium">{near.toFixed(1)}</span>
                   </span>
                 </div>

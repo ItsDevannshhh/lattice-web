@@ -147,7 +147,10 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     const jobId = cancelMatch[1]
     const stored = getStoredJob(jobId)
     try {
-      localStorage.setItem(`mock:job:${jobId}`, JSON.stringify({ ...stored, scenario: 'cancelled' }))
+      localStorage.setItem(
+        `mock:job:${jobId}`,
+        JSON.stringify({ ...stored, scenario: 'cancelled', cancelledAt: Date.now() }),
+      )
     } catch {
       // Ignore
     }
@@ -163,7 +166,9 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     const jobScenario = stored.scenario ?? scenario
 
     const elapsed = (Date.now() - stored.createdAt) / 1000
-    const state = simulateJob(elapsed, jobScenario)
+    const state = stored.cancelledAt
+      ? { ...simulateJob(elapsed, 'cancelled'), status: 'cancelled' as const, message: 'Cancelled.' }
+      : simulateJob(elapsed, jobScenario)
 
     const candidates =
       state.status === 'done'
@@ -300,6 +305,7 @@ interface StoredJob {
   createdAt: number
   request: DesignRequest
   scenario?: string
+  cancelledAt?: number
 }
 
 function getStoredJob(jobId: string): StoredJob {

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { LatticeViewerProps } from '@/components/LatticeViewer/types'
 import { LatticePlaceholder } from '@/components/LatticeViewer/LatticePlaceholder'
 import { LatticeCanvas } from '@/components/LatticeViewer/LatticeCanvas'
+import { LatticeThumb } from '@/components/LatticeViewer/LatticeThumb'
 
 /**
  * Check if WebGL context is available in the current environment
@@ -27,7 +28,7 @@ function hasWebGLSupport(): boolean {
  * - variant='thumbnail': Lightweight SVG wireframe so multiple candidate cards mount smoothly.
  * - Graceful fallback to LatticePlaceholder in headless/test environments or on WebGL error.
  */
-export default function LatticeViewer(props: LatticeViewerProps) {
+export default function LatticeViewer(props: LatticeViewerProps & { active?: boolean; seedKey?: string }) {
   const [canRender3D] = useState(hasWebGLSupport)
   const [hasError, setHasError] = useState(false)
 
@@ -48,6 +49,11 @@ export default function LatticeViewer(props: LatticeViewerProps) {
         onError={handleError}
       />
     )
+  }
+
+  // Thumbnails: rotating 3D through one shared renderer (falls back to the SVG wireframe by itself)
+  if (canRender3D && props.variant === 'thumbnail') {
+    return <LatticeThumb {...props} />
   }
 
   // Fallback placeholder (fast, accessible, renders in all environments including tests)

@@ -14,7 +14,8 @@ const REQUEST: DesignRequest = {
 
 describe('cancelJob', () => {
   it('POSTs /api/jobs/{id}/cancel and the job then reports cancelled', async () => {
-    await new Promise((r) => setTimeout(r, 50)) // the mock adapter loads lazily
+    await import('@/mocks/adapter') // the client loads the mock adapter lazily; make sure it is there
+    await new Promise((r) => setTimeout(r, 200))
     const { job_id } = await createDesign(REQUEST)
     const res = await cancelJob(job_id)
     expect(res.job_id).toBe(job_id)

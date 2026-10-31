@@ -36,6 +36,13 @@ The backend's real responses are exported by `python scripts/export_contract_fix
 Known shape rules (the backend sends `null` for "not set"; the schemas turn it into `undefined`):
 `stage`, `round`, `k`, `queue_position`, `reach`, `request`, `rounds[].best_error_pct`, `message`, `matches_targets`.
 
+## 3D on the results page
+
+Every ranked candidate is shown rotating in its card. The cards share ONE WebGL renderer (`src/components/LatticeViewer/thumbRenderer.ts`)
+that draws each visible design and copies the frame into the card's own canvas, so a page with 20 designs never hits the browser's
+WebGL-context limit; designs that are off screen, or a hidden tab, cost nothing. Hover or focus speeds the rotation up. With
+`prefers-reduced-motion` the part is drawn once and does not move. Opening a card gives the full orbit / zoom viewer.
+
 ## Layout
 
 `src/api` client, schemas, events (SSE with polling fallback) · `src/features` design form, job, results, detail ·

@@ -19,6 +19,7 @@ import { ResultsBanner } from '@/features/results/ResultsBanner'
 import { RequestJsonDialog } from '@/features/design-form/RequestJsonDialog'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { InlineAlert } from '@/components/feedback/InlineAlert'
@@ -211,12 +212,14 @@ export default function JobPage() {
           </div>
         )}
 
-        <StageStepper currentStage={stage} status={job.status} />
-
-        <ProgressPanel
-          progress={job.status === 'queued' ? 0 : progress}
-          message={job.status === 'queued' ? queueMsg : message}
-        />
+        <Card className="space-y-6 p-5 sm:p-6">
+          <StageStepper currentStage={stage} status={job.status} />
+          <div className="rule-fade" />
+          <ProgressPanel
+            progress={job.status === 'queued' ? 0 : progress}
+            message={job.status === 'queued' ? queueMsg : message}
+          />
+        </Card>
 
         {job.reach && (
           <div className="flex items-center gap-2 text-xs">

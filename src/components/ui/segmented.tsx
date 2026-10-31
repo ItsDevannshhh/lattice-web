@@ -15,7 +15,7 @@ export function Segmented<T extends string>({
 }: SegmentedProps<T>) {
   return (
     <div
-      className={cn('border-line bg-surface-2 inline-flex rounded-md border p-0.5', className)}
+      className={cn('border-line bg-surface-2 inline-flex rounded-lg border p-0.5', className)}
       role="radiogroup"
     >
       {options.map((opt) => (
@@ -26,8 +26,8 @@ export function Segmented<T extends string>({
           aria-checked={value === opt.value}
           onClick={() => onChange(opt.value)}
           className={cn(
-            'cursor-pointer rounded-sm px-3 py-1.5 text-xs font-medium transition-all duration-150',
-            value === opt.value ? 'bg-surface text-text shadow-sm' : 'text-muted hover:text-text',
+            'cursor-pointer whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium transition-[background-color,color,box-shadow] duration-200',
+            value === opt.value ? 'bg-surface text-text shadow-sm ring-1 ring-line' : 'text-muted hover:text-text',
           )}
         >
           {opt.label}

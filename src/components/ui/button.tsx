@@ -6,12 +6,14 @@ import { cn } from '@/lib/cn'
 import { Loader2 } from 'lucide-react'
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 font-medium transition-all duration-150 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
+  'inline-flex select-none items-center justify-center gap-2 font-medium transition-[background-color,color,border-color,box-shadow,transform,filter] duration-200 ease-out cursor-pointer active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
   {
     variants: {
       variant: {
-        primary: 'bg-accent text-accent-fg hover:brightness-110 active:brightness-95',
-        secondary: 'bg-surface-2 text-text border border-line hover:bg-line active:bg-surface-2',
+        primary:
+          'bg-accent text-accent-fg shadow-[inset_0_1px_0_rgba(255,255,255,0.28),0_8px_22px_-10px_var(--color-accent)] hover:brightness-110 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.28),0_10px_28px_-8px_var(--color-accent)] active:brightness-95',
+        secondary:
+          'bg-surface-2 text-text border border-line hover:border-faint/60 hover:bg-line/60 active:bg-surface-2',
         ghost: 'text-muted hover:bg-surface-2 hover:text-text active:bg-line',
         danger: 'bg-danger text-white hover:brightness-110 active:brightness-95',
         outline: 'border border-line text-text hover:bg-surface-2 active:bg-line',

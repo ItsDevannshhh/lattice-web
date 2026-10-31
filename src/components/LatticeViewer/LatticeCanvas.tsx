@@ -24,7 +24,7 @@ const AXIS_COLORS: Record<'x' | 'y' | 'z', THREE.Color> = {
   y: new THREE.Color('#10b981'), // emerald
   z: new THREE.Color('#06b6d4'), // cyan
 }
-const DEFAULT_COLOR = new THREE.Color('#14b8a6') // teal accent
+const DEFAULT_COLOR = new THREE.Color('#2dd4bf') // teal accent
 
 /**
  * 3D Mesh rendering the tiled lattice struts and nodes
@@ -146,11 +146,7 @@ function LatticeMesh({
         ref={strutInstancedRef}
         args={[cylinderGeo, undefined, struts.length]}
       >
-        <meshStandardMaterial
-          roughness={0.25}
-          metalness={0.7}
-          envMapIntensity={0.8}
-        />
+        <meshStandardMaterial roughness={0.34} metalness={0.35} />
       </instancedMesh>
 
       {/* Spherical Joints at Nodes */}
@@ -158,10 +154,7 @@ function LatticeMesh({
         ref={nodeInstancedRef}
         args={[sphereGeo, undefined, nodes.length]}
       >
-        <meshStandardMaterial
-          roughness={0.3}
-          metalness={0.7}
-        />
+        <meshStandardMaterial roughness={0.4} metalness={0.35} />
       </instancedMesh>
     </group>
   )
@@ -215,7 +208,7 @@ export function LatticeCanvas({
   return (
     <div
       className={cn(
-        'relative h-full w-full overflow-hidden select-none bg-surface-2',
+        'relative h-full w-full overflow-hidden select-none touch-none bg-surface-2',
         className,
       )}
     >
@@ -230,7 +223,8 @@ export function LatticeCanvas({
         }}
       >
         {/* Studio Lighting */}
-        <ambientLight intensity={0.7} />
+        <hemisphereLight args={['#dfeaff', '#1a2230', 1.1]} />
+        <ambientLight intensity={0.45} />
         <directionalLight position={[10, 15, 10]} intensity={1.3} />
         <directionalLight position={[-10, -10, -5]} intensity={0.4} />
         <pointLight position={[0, 10, 0]} intensity={0.5} />
@@ -264,10 +258,10 @@ export function LatticeCanvas({
           type="button"
           onClick={() => setAutoRotate(!autoRotate)}
           className={cn(
-            'flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium shadow-sm transition-all backdrop-blur-md',
+            'flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-medium shadow-sm transition-[background-color,color,border-color] duration-200 backdrop-blur-md',
             autoRotate
-              ? 'bg-accent/20 border border-accent/40 text-accent'
-              : 'bg-surface/80 border border-line text-muted hover:text-text',
+              ? 'bg-accent/15 border border-accent/40 text-accent'
+              : 'bg-surface/80 border border-line text-muted hover:text-text hover:border-faint/60',
           )}
           title={autoRotate ? 'Pause 3D rotation' : 'Start 3D rotation motion'}
           aria-label={autoRotate ? 'Pause 3D rotation' : 'Start 3D rotation motion'}
@@ -288,7 +282,7 @@ export function LatticeCanvas({
         <button
           type="button"
           onClick={handleResetCamera}
-          className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium bg-surface/80 border border-line text-muted hover:text-text shadow-sm transition-all backdrop-blur-md"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-medium bg-surface/80 border border-line text-muted hover:text-text hover:border-faint/60 shadow-sm transition-[color,border-color] duration-200 backdrop-blur-md"
           title="Reset 3D camera"
           aria-label="Reset 3D camera"
         >
@@ -298,7 +292,7 @@ export function LatticeCanvas({
 
       {/* Hint overlay */}
       <div className="pointer-events-none absolute bottom-2 left-3 z-10 text-[10px] text-faint flex items-center gap-2">
-        <span>Drag to rotate · Scroll to zoom</span>
+        <span>Drag to rotate · Scroll or pinch to zoom</span>
       </div>
     </div>
   )

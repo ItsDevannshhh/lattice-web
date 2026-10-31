@@ -8,8 +8,8 @@ export function Card({ className, hover, ...props }: CardProps) {
   return (
     <div
       className={cn(
-        'border-line bg-surface rounded-lg border shadow-sm',
-        hover && 'hover:border-accent/30 transition-shadow duration-150 hover:shadow-md',
+        'border-line bg-surface rounded-xl border shadow-sm',
+        hover && 'hover:border-accent/30 transition-[box-shadow,border-color] duration-200 hover:shadow-md',
         className,
       )}
       {...props}

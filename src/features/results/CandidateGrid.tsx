@@ -10,8 +10,8 @@ interface CandidateGridProps {
 export function CandidateGrid({ candidates, jobId, request }: CandidateGridProps) {
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      {candidates.map((c) => (
-        <CandidateCard key={c.id} candidate={c} jobId={jobId} request={request} />
+      {candidates.map((c, i) => (
+        <CandidateCard key={c.id} candidate={c} jobId={jobId} request={request} index={i} />
       ))}
     </div>
   )

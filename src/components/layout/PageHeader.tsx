@@ -9,9 +9,7 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, description, children, className }: PageHeaderProps) {
   return (
-    <div className={cn('relative pb-6', className)}>
-      {/* Subtle lattice grid background */}
-      <div className="lattice-grid-bg pointer-events-none absolute inset-0" />
+    <div className={cn('relative pb-4', className)}>
       <div className="relative flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-text text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h1>

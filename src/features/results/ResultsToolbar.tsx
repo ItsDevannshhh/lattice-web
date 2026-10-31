@@ -26,7 +26,7 @@ export function ResultsToolbar({
   request,
 }: ResultsToolbarProps) {
   return (
-    <div className="flex flex-wrap items-center gap-3 py-2">
+    <div className="bg-bg/85 sm:sticky sm:top-14 z-30 -mx-4 flex flex-wrap items-center gap-3 border-b border-line/70 px-4 py-2.5 backdrop-blur-md sm:-mx-6 sm:px-6">
       <Segmented
         value={viewMode}
         onChange={(v) => onViewModeChange(v as ViewMode)}

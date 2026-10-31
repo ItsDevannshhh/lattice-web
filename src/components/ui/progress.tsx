@@ -12,16 +12,20 @@ export function Progress({ value, className, showLabel }: ProgressProps) {
   return (
     <div className={cn('flex items-center gap-3', className)}>
       <div
-        className="bg-surface-2 relative h-2.5 flex-1 overflow-hidden rounded-full"
+        className="bg-surface-2 relative h-2 flex-1 overflow-hidden rounded-full"
         role="progressbar"
         aria-valuenow={pct}
         aria-valuemin={0}
         aria-valuemax={100}
       >
         <div
-          className="bg-accent h-full rounded-full transition-all duration-500 ease-out"
+          className="bg-accent relative h-full overflow-hidden rounded-full transition-[width] duration-700 ease-out"
           style={{ width: `${pct}%` }}
-        />
+        >
+          {pct > 0 && pct < 100 && (
+            <span className="animate-sweep absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/40 to-transparent" />
+          )}
+        </div>
       </div>
       {showLabel && (
         <span className="text-muted w-12 text-right font-mono text-sm tabular-nums">{pct}%</span>

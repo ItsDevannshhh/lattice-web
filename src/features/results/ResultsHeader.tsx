@@ -26,7 +26,7 @@ export function ResultsHeader({
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-text text-xl font-semibold">{candidateCount} designs found</h1>
+        <h1 className="text-text text-2xl font-semibold tracking-tight sm:text-3xl">{candidateCount} designs found</h1>
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => copy(window.location.href, 'Link copied')}

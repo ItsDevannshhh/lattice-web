@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { useMaterials } from '@/hooks/useMaterials'
 import { useCreateDesign } from '@/hooks/useCreateDesign'
 import { useReach } from '@/hooks/useReach'
+import { useLimits } from '@/hooks/useLimits'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Select, SelectItem } from '@/components/ui/select'
@@ -197,9 +198,31 @@ export function DesignForm() {
     submitWithForce(false)
   }, onError)
 
+  const { data: limits } = useLimits(formValues.material || undefined)
+
   const fillExample = () => {
     const matId = materials?.find((m) => m.id === 'ti64')?.id ?? materials?.[0]?.id ?? ''
-    reset({ ...EXAMPLE_VALUES, material: matId })
+    // The example comes from what the dataset actually holds (median stiffness and strength at density 0.15, from
+    // /api/limits), so it is a target a stored lattice can meet. Without limits the built-in example is used.
+    const row = limits?.densities?.['0.15']
+    const mat = materials?.find((m) => m.id === matId)
+    let example = EXAMPLE_VALUES
+    if (row && mat) {
+      const sig = (v: number) => String(Number(v.toPrecision(3)))
+      const vol = partVolumeCm3([40, 40, 40])
+      example = {
+        ...EXAMPLE_VALUES,
+        stiffnessX: sig(row.stiffness_gpa.median),
+        stiffnessY: sig(row.stiffness_gpa.median),
+        stiffnessZ: sig(row.stiffness_gpa.median),
+        strengthX: sig(row.strength_mpa.median),
+        strengthY: sig(row.strength_mpa.median),
+        strengthZ: sig(row.strength_mpa.median),
+        strengthDontCareZ: false,
+        maxMassG: sig(0.15 * solidMassG(vol, mat.density_g_cm3)),
+      }
+    }
+    reset({ ...example, material: matId })
     setAdjustedFields(new Set())
   }
 
@@ -276,9 +299,9 @@ export function DesignForm() {
           )}
 
           {/* Material */}
-          <Card>
+          <Card className="animate-card-in">
             <CardHeader>
-              <h2 className="text-text text-base font-semibold">Material</h2>
+              <h2 className="text-text text-base font-semibold"><span className="text-accent/80 mr-2 font-mono text-[11px] font-medium tracking-wider">01</span>Material</h2>
             </CardHeader>
             <CardContent>
               {materialsLoading ? (
@@ -331,11 +354,11 @@ export function DesignForm() {
           </Card>
 
           {/* Stiffness */}
-          <Card>
+          <Card className="animate-card-in" style={{ animationDelay: '60ms' }}>
             <CardHeader>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
                 <h2 className="text-text text-base font-semibold">
-                  Stiffness targets
+                  <span className="text-accent/80 mr-2 font-mono text-[11px] font-medium tracking-wider">02</span>Stiffness targets
                   <span className="text-muted ml-1.5 text-xs font-normal">(GPa)</span>
                 </h2>
                 <ModeSelector
@@ -359,12 +382,12 @@ export function DesignForm() {
           </Card>
 
           {/* Strength */}
-          <Card>
+          <Card className="animate-card-in" style={{ animationDelay: '120ms' }}>
             <CardHeader>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <h2 className="text-text text-base font-semibold">
-                    Strength targets
+                    <span className="text-accent/80 mr-2 font-mono text-[11px] font-medium tracking-wider">03</span>Strength targets
                     <span className="text-muted ml-1.5 text-xs font-normal">(MPa)</span>
                   </h2>
                   <InfoTip content="Load the design takes before failing: the lower of yield and buckling." />
@@ -448,10 +471,10 @@ export function DesignForm() {
           )}
 
           {/* Weight & Part */}
-          <Card>
+          <Card className="animate-card-in" style={{ animationDelay: '180ms' }}>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <h2 className="text-text text-base font-semibold">Weight & part</h2>
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+                <h2 className="text-text text-base font-semibold"><span className="text-accent/80 mr-2 font-mono text-[11px] font-medium tracking-wider">04</span>Weight & part</h2>
                 <ModeSelector
                   value={formValues.weightMode}
                   onChange={(v: TargetMode) => setValue('weightMode', v)}
@@ -612,7 +635,7 @@ export function DesignForm() {
         </div>
 
         {/* Right: summary panel */}
-        <div className="hidden lg:block">
+        <div className="hidden lg:sticky lg:top-20 lg:block">
           <SummaryPanel values={formValues} />
         </div>
 
