@@ -167,7 +167,7 @@ export function searchMockImplantZones(implantId: string): Record<string, string
   const zoneJobs: Record<string, string> = {}
   state.zones.forEach((zone) => {
     if (zone.kind === 'lattice') {
-      const jobId = 'j_' + zone.id + '_' + Math.random().toString(36).slice(2, 6)
+      const jobId = `j_${implantId}_${zone.id}`
       zoneJobs[zone.id] = jobId
 
       // Create a mock job for this zone
@@ -176,14 +176,14 @@ export function searchMockImplantZones(implantId: string): Record<string, string
         part: { size_mm: [30, 30, zone.thickness_mm], cell_mm: 5 },
         target: {
           stiffness_gpa: {
-            x: zone.requirement.stiffness_gpa.x.value,
-            y: zone.requirement.stiffness_gpa.y.value,
-            z: zone.requirement.stiffness_gpa.z.value,
+            x: zone.requirement.stiffness_gpa.x.value ?? 8,
+            y: zone.requirement.stiffness_gpa.y.value ?? 8,
+            z: zone.requirement.stiffness_gpa.z.value ?? 12,
           },
           strength_mpa: {
-            x: zone.requirement.strength_mpa.x.value,
-            y: zone.requirement.strength_mpa.y.value,
-            z: zone.requirement.strength_mpa.z.value,
+            x: zone.requirement.strength_mpa.x.value ?? 50,
+            y: zone.requirement.strength_mpa.y.value ?? 50,
+            z: zone.requirement.strength_mpa.z.value ?? 70,
           },
           rel_density: zone.requirement.density?.value ?? 0.15,
         },
@@ -195,7 +195,11 @@ export function searchMockImplantZones(implantId: string): Record<string, string
       try {
         localStorage.setItem(
           `mock:job:${jobId}`,
-          JSON.stringify({ createdAt: Date.now(), request: zoneReq, scenario: 'success' }),
+          JSON.stringify({
+            createdAt: Date.now() - 60000,
+            request: zoneReq,
+            scenario: 'success',
+          }),
         )
       } catch {
         // Ignore
@@ -212,21 +216,44 @@ export function getMockZoneCandidates(implantId: string, zoneId: string): ZoneCa
   const state = getMockImplantState(implantId)
   const zone = state?.zones.find((z) => z.id === zoneId)
   const thickness = zone ? zone.thickness_mm : 40
+  const jobId = state?.zoneJobs?.[zoneId] || `j_${implantId}_${zoneId}`
 
-  const mockReq: DesignRequest = {
+  const zoneReq: DesignRequest = {
     material: 'ti64',
-    part: { size_mm: [25, 25, thickness], cell_mm: 5 },
+    part: { size_mm: [30, 30, thickness], cell_mm: 5 },
     target: {
-      stiffness_gpa: { x: 8, y: 8, z: 12 },
-      strength_mpa: { x: 50, y: 50, z: 70 },
-      rel_density: 0.15,
+      stiffness_gpa: {
+        x: zone?.requirement.stiffness_gpa.x.value ?? 8,
+        y: zone?.requirement.stiffness_gpa.y.value ?? 8,
+        z: zone?.requirement.stiffness_gpa.z.value ?? 12,
+      },
+      strength_mpa: {
+        x: zone?.requirement.strength_mpa.x.value ?? 50,
+        y: zone?.requirement.strength_mpa.y.value ?? 50,
+        z: zone?.requirement.strength_mpa.z.value ?? 70,
+      },
+      rel_density: zone?.requirement.density?.value ?? 0.15,
     },
     modes: { stiffness: 'about', strength: 'at_least', weight: 'at_most' },
     tolerance_pct: 10,
     n_results: 3,
   }
 
-  const candidates = generateCandidates(`cand_${zoneId}`, mockReq, 'success')
+  // Ensure the mock job is registered so direct links and detail views resolve
+  try {
+    localStorage.setItem(
+      `mock:job:${jobId}`,
+      JSON.stringify({
+        createdAt: Date.now() - 60000,
+        request: zoneReq,
+        scenario: 'success',
+      }),
+    )
+  } catch {
+    // Ignore
+  }
+
+  const candidates = generateCandidates(jobId, zoneReq, 'success')
 
   return {
     candidates,
