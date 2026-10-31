@@ -1,23 +1,22 @@
 import { InlineAlert } from '@/components/feedback/InlineAlert'
-import { MIN_PRINT_DIAMETER_MM } from '@/config/constants'
-import { fmtMm } from '@/lib/format'
+import { checkPrintability } from '@/lib/printability'
 
 interface PrintabilityNoticeProps {
-  strutDiameter: number
+  strutRadiusMm: number
+  cellSizeMm: number
 }
 
-export function PrintabilityNotice({ strutDiameter }: PrintabilityNoticeProps) {
-  const isThin = strutDiameter < MIN_PRINT_DIAMETER_MM
+export function PrintabilityNotice({ strutRadiusMm, cellSizeMm }: PrintabilityNoticeProps) {
+  const result = checkPrintability(strutRadiusMm, cellSizeMm)
 
-  return isThin ? (
-    <InlineAlert variant="warning">
-      Strut diameter ({fmtMm(strutDiameter)}) is below {MIN_PRINT_DIAMETER_MM} mm — may be too thin
-      for most nozzles. STL not yet checked against a specific printer.
-    </InlineAlert>
-  ) : (
-    <InlineAlert variant="info">
-      Strut diameter OK for a 0.4 mm nozzle ({fmtMm(strutDiameter)}). STL not yet checked against a
-      specific printer.
+  return (
+    <InlineAlert variant={result.passes ? 'info' : 'warning'}>
+      <div className="space-y-1">
+        <p className="font-medium">{result.message}</p>
+        <p className="text-muted text-[11px]">
+          Always verify against your specific additive manufacturing printer, slicer tolerances, and material shrinkage before production.
+        </p>
+      </div>
     </InlineAlert>
   )
 }

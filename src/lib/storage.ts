@@ -2,21 +2,28 @@ import type { DesignRequest } from '@/api/types'
 
 const STORAGE_PREFIX = 'lattice:'
 
-/** Save a design request keyed by job ID */
-export function saveRequest(jobId: string, request: DesignRequest): void {
+/** Save a design request keyed by job ID with optional frontend metadata */
+export function saveRequest(
+  jobId: string,
+  request: DesignRequest,
+  metadata?: { adjustedFields?: string[] },
+): void {
   try {
-    localStorage.setItem(`${STORAGE_PREFIX}request:${jobId}`, JSON.stringify(request))
+    const payload = metadata ? { ...request, _metadata: metadata } : request
+    localStorage.setItem(`${STORAGE_PREFIX}request:${jobId}`, JSON.stringify(payload))
   } catch {
     // Storage full or unavailable
   }
 }
 
 /** Load a saved design request by job ID */
-export function loadRequest(jobId: string): DesignRequest | null {
+export function loadRequest(
+  jobId: string,
+): (DesignRequest & { _metadata?: { adjustedFields?: string[] } }) | null {
   try {
     const raw = localStorage.getItem(`${STORAGE_PREFIX}request:${jobId}`)
     if (!raw) return null
-    return JSON.parse(raw) as DesignRequest
+    return JSON.parse(raw)
   } catch {
     return null
   }

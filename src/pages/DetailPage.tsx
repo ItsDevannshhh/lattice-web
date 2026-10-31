@@ -133,9 +133,12 @@ export default function DetailPage() {
 
           <PropertyTable candidate={candidate} request={request} tolerance={tolerance} />
 
-          <PrintabilityNotice strutDiameter={strutDiameter} />
+          <PrintabilityNotice
+            strutRadiusMm={candidate.lattice.strut_radius_mm}
+            cellSizeMm={candidate.lattice.cell_size_mm}
+          />
 
-          <DownloadMenu candidate={candidate} tiles={tiles} />
+          <DownloadMenu candidate={candidate} tiles={tiles} request={request} />
         </div>
       </div>
     </div>

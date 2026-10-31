@@ -1,6 +1,6 @@
 import { z } from 'zod/v4'
+import type { DesignRequest } from '@/api/types'
 
-const axisSchema = z.enum(['x', 'y', 'z'])
 const failureModeSchema = z.enum(['yield', 'buckling'])
 
 const perAxisNumber = z.object({
@@ -41,7 +41,7 @@ export const propertiesSchema = z
     yield_strength_mpa: perAxisNumber,
     buckling_strength_mpa: perAxisNumber,
     strength_mpa: perAxisNumber,
-    governing_failure: perAxisFailure,
+    governing_failure: perAxisFailure.optional(),
   })
   .passthrough()
 
@@ -60,6 +60,7 @@ export const candidateSchema = z
     id: z.string(),
     rank: z.number(),
     match_error_pct: z.number(),
+    matches_targets: z.boolean(),
     rel_density: z.number(),
     mass_g: z.number(),
     lattice: latticeSchema,
@@ -68,23 +69,47 @@ export const candidateSchema = z
   })
   .passthrough()
 
-const jobStatusSchema = z.enum(['queued', 'running', 'done', 'failed'])
+const jobStatusSchema = z.enum(['queued', 'running', 'done', 'failed', 'cancelled'])
 const jobStageSchema = z.enum(['search', 'repair', 'verify', 'rank'])
+const reachLevelSchema = z.enum(['covered', 'extended', 'outside', 'infeasible'])
+
+const roundInfoSchema = z
+  .object({
+    round: z.number(),
+    k: z.number(),
+    best_error_pct: z.number(),
+    matched: z.boolean(),
+    n_candidates: z.number(),
+    round_seconds: z.number(),
+    elapsed_seconds: z.number(),
+  })
+  .passthrough()
 
 export const jobSchema = z
   .object({
     job_id: z.string(),
     status: jobStatusSchema,
     stage: jobStageSchema.optional(),
+    round: z.number().optional(),
+    k: z.number().optional(),
     progress: z.number(),
     message: z.string(),
+    rounds: z.array(roundInfoSchema).optional(),
+    infeasible: z.boolean().optional(),
+    warnings: z.array(z.string()).optional(),
+    reach: z
+      .object({ level: reachLevelSchema, distance_pct: z.number() })
+      .passthrough()
+      .optional(),
     candidates: z.array(candidateSchema),
+    queue_position: z.number().optional(),
+    request: z.custom<DesignRequest>().optional(),
   })
   .passthrough()
 
 export const jobEventSchema = z
   .object({
-    stage: jobStageSchema,
+    stage: jobStageSchema.optional(),
     progress: z.number(),
     message: z.string(),
   })
@@ -96,7 +121,40 @@ export const createDesignResponseSchema = z
   })
   .passthrough()
 
-export { axisSchema, failureModeSchema, jobStatusSchema, jobStageSchema }
+export const reachResponseSchema = z
+  .object({
+    level: reachLevelSchema,
+    distance_pct: z.number(),
+    density: z.number(),
+    requested: z
+      .object({
+        stiffness_gpa: z.array(z.union([z.number(), z.null()])),
+        strength_mpa: z.array(z.union([z.number(), z.null()])),
+      })
+      .passthrough(),
+    nearest: z
+      .object({
+        stiffness_gpa: z.array(z.number()),
+        strength_mpa: z.array(z.number()),
+        lattice_id: z.number(),
+      })
+      .passthrough(),
+    bounds: z
+      .object({
+        stiffness_sum_max_gpa: z.number(),
+        strength_max_mpa: z.number(),
+      })
+      .passthrough(),
+    message: z.string(),
+  })
+  .passthrough()
+
+export {
+  failureModeSchema,
+  jobStatusSchema,
+  jobStageSchema,
+  reachLevelSchema,
+}
 
 /** Validate data against a schema. In DEV, throws on mismatch. In PROD, warns and returns raw data. */
 export function parseResponse<T>(schema: z.ZodType<T>, data: unknown, label: string): T {

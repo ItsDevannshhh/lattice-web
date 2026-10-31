@@ -3,11 +3,18 @@ import { createBrowserRouter } from 'react-router-dom'
 import { AppShell } from '@/components/layout/AppShell'
 import { ErrorBoundary } from '@/app/ErrorBoundary'
 import { Skeleton } from '@/components/ui/skeleton'
+import { ENABLE_IMPLANT } from '@/config/env'
 
 const DesignPage = lazy(() => import('@/pages/DesignPage'))
 const JobPage = lazy(() => import('@/pages/JobPage'))
 const DetailPage = lazy(() => import('@/pages/DetailPage'))
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'))
+
+// Implant pages
+const ImplantPage = lazy(() => import('@/pages/ImplantPage'))
+const ImplantZonesPage = lazy(() => import('@/pages/ImplantZonesPage'))
+const ImplantResultsPage = lazy(() => import('@/pages/ImplantResultsPage'))
+const ImplantFinalPage = lazy(() => import('@/pages/ImplantFinalPage'))
 
 function PageSkeleton() {
   return (
@@ -21,6 +28,51 @@ function PageSkeleton() {
     </div>
   )
 }
+
+const implantRoutes = ENABLE_IMPLANT
+  ? [
+      {
+        path: '/implant',
+        element: (
+          <ErrorBoundary>
+            <Suspense fallback={<PageSkeleton />}>
+              <ImplantPage />
+            </Suspense>
+          </ErrorBoundary>
+        ),
+      },
+      {
+        path: '/implant/:implantId/zones',
+        element: (
+          <ErrorBoundary>
+            <Suspense fallback={<PageSkeleton />}>
+              <ImplantZonesPage />
+            </Suspense>
+          </ErrorBoundary>
+        ),
+      },
+      {
+        path: '/implant/:implantId/results',
+        element: (
+          <ErrorBoundary>
+            <Suspense fallback={<PageSkeleton />}>
+              <ImplantResultsPage />
+            </Suspense>
+          </ErrorBoundary>
+        ),
+      },
+      {
+        path: '/implant/:implantId/result',
+        element: (
+          <ErrorBoundary>
+            <Suspense fallback={<PageSkeleton />}>
+              <ImplantFinalPage />
+            </Suspense>
+          </ErrorBoundary>
+        ),
+      },
+    ]
+  : []
 
 export const router = createBrowserRouter([
   {
@@ -56,6 +108,7 @@ export const router = createBrowserRouter([
           </ErrorBoundary>
         ),
       },
+      ...implantRoutes,
       {
         path: '*',
         element: (

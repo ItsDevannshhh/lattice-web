@@ -1,8 +1,23 @@
 import type { AxiosResponse, InternalAxiosRequestConfig } from 'axios'
 import type { DesignRequest, Job } from '@/api/types'
+import type { ConfirmImplantRequest, Zone } from '@/api/implantTypes'
 import { getMockScenario } from '@/lib/storage'
 import { simulateJob } from '@/mocks/jobSim'
 import { generateCandidates } from '@/mocks/generate'
+import { mockReach } from '@/mocks/reachSim'
+import { mockLimits } from '@/mocks/limitsSim'
+import {
+  createMockImplant,
+  confirmMockImplant,
+  getMockZones,
+  updateMockZones,
+  searchMockImplantZones,
+  getMockZoneCandidates,
+  assembleMockImplant,
+  getMockImplantResult,
+  getMockExportStl,
+  getMockReport,
+} from '@/mocks/implantMock'
 import materialsFixture from '@/mocks/fixtures/materials.json'
 
 /** Artificial latency in ms */
@@ -45,7 +60,7 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
   // Simulate offline
   if (scenario === 'offline') {
     await delay()
-    const error = new Error("Can't reach the Lattice Designer service.") as Error & {
+    const error = new Error('Can\u2019t reach the Lattice Designer service.') as Error & {
       isAxiosError: boolean
       response: undefined
     }
@@ -54,23 +69,54 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     throw error
   }
 
+  // queue_full scenario for POST /api/designs
+  if (scenario === 'queue_full') {
+    const url = config.url ?? ''
+    const method = (config.method ?? 'get').toLowerCase()
+    if (method === 'post' && /\/api\/designs$/.test(url)) {
+      await delay()
+      makeErrorResponse(429, 'queue_full', 'The queue is full. Try again in a minute.')
+    }
+  }
+
   await delay()
 
   const url = config.url ?? ''
   const method = (config.method ?? 'get').toLowerCase()
 
   // GET /api/health
-  if (method === 'get' && url.match(/\/api\/health$/)) {
+  if (method === 'get' && /\/api\/health$/.test(url)) {
     return makeResponse({ status: 'ok', model_loaded: true, gpu: true })
   }
 
   // GET /api/materials
-  if (method === 'get' && url.match(/\/api\/materials$/)) {
+  if (method === 'get' && /\/api\/materials$/.test(url)) {
     return makeResponse(materialsFixture)
   }
 
+  // GET /api/limits
+  if (method === 'get' && /\/api\/limits/.test(url)) {
+    const params = config.params as Record<string, string> | undefined
+    const materialId = params?.material ?? 'ti64'
+    const material = (materialsFixture as Array<{ id: string; E_gpa: number; yield_mpa: number }>)
+      .find((m) => m.id === materialId)
+    return makeResponse(mockLimits(material?.E_gpa ?? 114, material?.yield_mpa ?? 880))
+  }
+
+  // POST /api/reach
+  if (method === 'post' && /\/api\/reach$/.test(url)) {
+    const request = parseBody<DesignRequest>(config)
+    const material = (materialsFixture as Array<{ id: string; E_gpa: number; yield_mpa: number; density_g_cm3: number }>)
+      .find((m) => m.id === request.material)
+    const result = mockReach(request, material ?? { E_gpa: 114, yield_mpa: 880, density_g_cm3: 4.43 })
+    if (result.error) {
+      makeErrorResponse(result.error.status, result.error.code, result.error.message)
+    }
+    return makeResponse(result.response)
+  }
+
   // POST /api/designs
-  if (method === 'post' && url.match(/\/api\/designs$/)) {
+  if (method === 'post' && /\/api\/designs$/.test(url)) {
     if (scenario === 'bad_target') {
       makeErrorResponse(
         422,
@@ -79,14 +125,14 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
       )
     }
 
-    const request = (
-      typeof config.data === 'string' ? JSON.parse(config.data) : config.data
-    ) as DesignRequest
+    const request = parseBody<DesignRequest>(config)
     const jobId = generateJobId()
 
-    // Store the job creation time for simulation
     try {
-      localStorage.setItem(`mock:job:${jobId}`, JSON.stringify({ createdAt: Date.now(), request }))
+      localStorage.setItem(
+        `mock:job:${jobId}`,
+        JSON.stringify({ createdAt: Date.now(), request, scenario }),
+      )
     } catch {
       // Ignore
     }
@@ -99,29 +145,38 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
   if (method === 'get' && jobMatch) {
     const jobId = jobMatch[1]
     const stored = getStoredJob(jobId)
-
-    if (!stored) {
-      makeErrorResponse(404, 'not_found', 'Job not found')
-    }
+    const jobScenario = stored.scenario ?? scenario
 
     const elapsed = (Date.now() - stored.createdAt) / 1000
-    const state = simulateJob(elapsed)
+    const state = simulateJob(elapsed, jobScenario)
+
+    const candidates =
+      state.status === 'done'
+        ? generateCandidates(jobId, stored.request, jobScenario)
+        : []
 
     const job: Job = {
       job_id: jobId,
       status: state.status,
       stage: state.stage,
+      round: state.round,
+      k: state.k,
       progress: state.progress,
       message: state.message,
-      candidates:
-        state.status === 'done' ? generateCandidates(jobId, stored.request, scenario) : [],
+      rounds: state.rounds,
+      infeasible: false,
+      warnings: state.warnings,
+      reach: state.reach,
+      candidates,
+      queue_position: state.queue_position,
+      request: stored.request,
     }
 
     return makeResponse(job)
   }
 
   // GET /api/jobs/:id/events — not handled by adapter (SSE uses the mock emitter)
-  if (method === 'get' && url.match(/\/api\/jobs\/[^/]+\/events$/)) {
+  if (method === 'get' && /\/api\/jobs\/[^/]+\/events$/.test(url)) {
     return makeResponse({ message: 'Use SSE' })
   }
 
@@ -129,7 +184,6 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
   const designMatch = url.match(/\/api\/designs\/([^/]+)$/)
   if (method === 'get' && designMatch) {
     const designId = designMatch[1]
-    // Search through all stored jobs
     const candidate = findCandidate(designId)
     if (!candidate) {
       makeErrorResponse(404, 'not_found', 'Design not found')
@@ -137,12 +191,100 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     return makeResponse(candidate)
   }
 
+  // --- Implant API Endpoints (Provisional) ---
+
+  // POST /api/implants
+  if (method === 'post' && /\/api\/implants$/.test(url)) {
+    const res = createMockImplant()
+    return makeResponse(res, 201)
+  }
+
+  // POST /api/implants/:id/confirm
+  const confirmMatch = url.match(/\/api\/implants\/([^/]+)\/confirm$/)
+  if (method === 'post' && confirmMatch) {
+    const implantId = confirmMatch[1]
+    const body = parseBody<ConfirmImplantRequest>(config)
+    confirmMockImplant(implantId, body)
+    return makeResponse({ status: 'ok', implant_id: implantId })
+  }
+
+  // GET /api/implants/:id/zones
+  const zonesMatch = url.match(/\/api\/implants\/([^/]+)\/zones$/)
+  if (method === 'get' && zonesMatch) {
+    const implantId = zonesMatch[1]
+    const zones = getMockZones(implantId)
+    return makeResponse(zones)
+  }
+
+  // PUT /api/implants/:id/zones
+  if (method === 'put' && zonesMatch) {
+    const implantId = zonesMatch[1]
+    const body = parseBody<{ zones?: Zone[] } | Zone[]>(config)
+    const zonesList = Array.isArray(body) ? body : body.zones ?? []
+    const updated = updateMockZones(implantId, zonesList)
+    return makeResponse(updated)
+  }
+
+  // POST /api/implants/:id/search
+  const searchMatch = url.match(/\/api\/implants\/([^/]+)\/search$/)
+  if (method === 'post' && searchMatch) {
+    const implantId = searchMatch[1]
+    const jobs = searchMockImplantZones(implantId)
+    return makeResponse(jobs)
+  }
+
+  // GET /api/implants/:id/zones/:zone_id/candidates
+  const candMatch = url.match(/\/api\/implants\/([^/]+)\/zones\/([^/]+)\/candidates$/)
+  if (method === 'get' && candMatch) {
+    const implantId = candMatch[1]
+    const zoneId = candMatch[2]
+    const res = getMockZoneCandidates(implantId, zoneId)
+    return makeResponse(res)
+  }
+
+  // POST /api/implants/:id/assemble
+  const assembleMatch = url.match(/\/api\/implants\/([^/]+)\/assemble$/)
+  if (method === 'post' && assembleMatch) {
+    const implantId = assembleMatch[1]
+    const body = parseBody<{ choices?: Record<string, string> }>(config)
+    const res = assembleMockImplant(implantId, body?.choices ?? {})
+    return makeResponse(res, 202)
+  }
+
+  // GET /api/implants/:id/result
+  const resultMatch = url.match(/\/api\/implants\/([^/]+)\/result$/)
+  if (method === 'get' && resultMatch) {
+    const implantId = resultMatch[1]
+    const res = getMockImplantResult(implantId)
+    return makeResponse(res)
+  }
+
+  // GET /api/implants/:id/export.stl
+  const exportMatch = url.match(/\/api\/implants\/([^/]+)\/export\.stl$/)
+  if (method === 'get' && exportMatch) {
+    const blob = getMockExportStl()
+    return makeResponse(blob)
+  }
+
+  // GET /api/implants/:id/report
+  const reportMatch = url.match(/\/api\/implants\/([^/]+)\/report$/)
+  if (method === 'get' && reportMatch) {
+    const implantId = reportMatch[1]
+    const blob = getMockReport(implantId)
+    return makeResponse(blob)
+  }
+
   makeErrorResponse(404, 'not_found', 'Not found')
+}
+
+function parseBody<T>(config: InternalAxiosRequestConfig): T {
+  return (typeof config.data === 'string' ? JSON.parse(config.data) : config.data) as T
 }
 
 interface StoredJob {
   createdAt: number
   request: DesignRequest
+  scenario?: string
 }
 
 function getStoredJob(jobId: string): StoredJob {
@@ -183,13 +325,12 @@ function getStoredJob(jobId: string): StoredJob {
 
 function findCandidate(designId: string) {
   const scenario = getMockScenario()
-  // Search all mock jobs
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i)
     if (!key?.startsWith('mock:job:')) continue
     const jobId = key.replace('mock:job:', '')
     const stored = getStoredJob(jobId)
-    const candidates = generateCandidates(jobId, stored.request, scenario)
+    const candidates = generateCandidates(jobId, stored.request, stored.scenario ?? scenario)
     const found = candidates.find((c) => c.id === designId)
     if (found) return found
   }

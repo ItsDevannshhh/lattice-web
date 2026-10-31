@@ -1,5 +1,7 @@
+// TEMPORARY: replace with real sample_*.json from Aryan
 import type { Candidate, DesignRequest, FailureMode, PerAxis, Properties } from '@/api/types'
 import { GRID_27, EDGE_SETS } from '@/mocks/lattices'
+import { AT_LEAST_STRENGTH_SLACK } from '@/config/constants'
 
 /** Simple seeded PRNG (mulberry32) */
 function createPrng(seed: string): () => number {
@@ -42,17 +44,22 @@ export function generateCandidates(
   const partVol =
     (request.part.size_mm[0] * request.part.size_mm[1] * request.part.size_mm[2]) / 1000
 
+  const isNoMatch = scenario === 'no_match'
+  const tolerance = request.tolerance_pct
   const candidates: Candidate[] = []
 
   for (let i = 0; i < n; i++) {
-    const matchErr = 1.5 + i * (7.5 / Math.max(n - 1, 1)) + (rand() - 0.5) * 0.5
-    const errFactor = 1 + (scenario === 'partial' ? 0.15 : 0) * (i === 0 ? 1 : 0)
+    // Error increases with rank; no_match scenario pushes all above tolerance
+    const baseErr = isNoMatch
+      ? tolerance + 1 + i * 2
+      : 1.5 + i * (7.5 / Math.max(n - 1, 1)) + (rand() - 0.5) * 0.5
+    const matchErr = Math.round(baseErr * 10) / 10
 
     // Build verified properties from targets with some variance
-    const verified = buildProperties(stiffTarget, strengthTarget, matchErr * errFactor, rand)
+    const verified = buildVerifiedProperties(stiffTarget, strengthTarget, baseErr, rand)
 
-    // Predicted = verified × (1 ± ~3%)
-    const predicted = perturbProperties(verified, 0.03, rand)
+    // Predicted = verified × (1 ± ~3%) WITHOUT governing_failure
+    const predicted = buildPredictedProperties(verified, 0.03, rand)
 
     // Relative density & mass
     const rd = rdLimit
@@ -66,13 +73,19 @@ export function generateCandidates(
     // Pick an edge set
     const edgeIdx = i % EDGE_SETS.length
 
-    // One candidate with thin struts (diameter < 0.4mm)
+    // One candidate with thin struts (diameter < 0.4mm) to exercise printability notice
     const strutRadius = i === 3 ? 0.19 : 0.35 + rand() * 0.15
+
+    // Determine matches_targets using the tolerance and mode rules
+    const meetsTargets = isNoMatch
+      ? false
+      : checkMeetsTargets(verified, stiffTarget, strengthTarget, request.modes, tolerance)
 
     candidates.push({
       id: `d_${jobId.replace('j_', '')}_${i + 1}`,
       rank: i + 1,
-      match_error_pct: Math.round(matchErr * 10) / 10,
+      match_error_pct: matchErr,
+      matches_targets: meetsTargets,
       rel_density: Math.round(rd * 1000) / 1000,
       mass_g: Math.round(mass * 10) / 10,
       lattice: {
@@ -90,7 +103,7 @@ export function generateCandidates(
   return candidates
 }
 
-function buildProperties(
+function buildVerifiedProperties(
   stiffTarget: PerAxis<number | null>,
   strengthTarget: PerAxis<number | null>,
   errorPct: number,
@@ -122,6 +135,7 @@ function buildProperties(
     z: Math.min(yieldS.z, buckling.z),
   }
 
+  // Mix governing failure across candidates
   const failure: PerAxis<FailureMode> = {
     x: yieldS.x <= buckling.x ? 'yield' : 'buckling',
     y: yieldS.y <= buckling.y ? 'yield' : 'buckling',
@@ -137,27 +151,81 @@ function buildProperties(
   }
 }
 
-function perturbProperties(base: Properties, maxPct: number, rand: () => number): Properties {
-  return {
+/** Predicted properties: no governing_failure (only verified has it) */
+function buildPredictedProperties(
+  base: Properties,
+  maxPct: number,
+  rand: () => number,
+): Properties {
+  const predicted: Properties = {
     stiffness_gpa: perturbAxis(base.stiffness_gpa, maxPct, rand),
     yield_strength_mpa: perturbAxis(base.yield_strength_mpa, maxPct, rand),
     buckling_strength_mpa: perturbAxis(base.buckling_strength_mpa, maxPct, rand),
-    strength_mpa: {
-      x: Math.min(
-        perturbAxis(base.yield_strength_mpa, maxPct, rand).x,
-        perturbAxis(base.buckling_strength_mpa, maxPct, rand).x,
-      ),
-      y: Math.min(
-        perturbAxis(base.yield_strength_mpa, maxPct, rand).y,
-        perturbAxis(base.buckling_strength_mpa, maxPct, rand).y,
-      ),
-      z: Math.min(
-        perturbAxis(base.yield_strength_mpa, maxPct, rand).z,
-        perturbAxis(base.buckling_strength_mpa, maxPct, rand).z,
-      ),
-    },
-    governing_failure: base.governing_failure,
+    strength_mpa: { x: 0, y: 0, z: 0 },
+    // No governing_failure on predicted — this is intentional per the contract
   }
+
+  // strength = min(yield, buckling)
+  predicted.strength_mpa = {
+    x: Math.min(predicted.yield_strength_mpa.x, predicted.buckling_strength_mpa.x),
+    y: Math.min(predicted.yield_strength_mpa.y, predicted.buckling_strength_mpa.y),
+    z: Math.min(predicted.yield_strength_mpa.z, predicted.buckling_strength_mpa.z),
+  }
+
+  return predicted
+}
+
+function checkMeetsTargets(
+  verified: Properties,
+  stiffTarget: PerAxis<number | null>,
+  strengthTarget: PerAxis<number | null>,
+  modes: { stiffness: string; strength: string },
+  tolerancePct: number,
+): boolean {
+  const axes = ['x', 'y', 'z'] as const
+  for (const axis of axes) {
+    const target = stiffTarget[axis]
+    if (target != null) {
+      if (!checkAxis(verified.stiffness_gpa[axis], target, modes.stiffness, tolerancePct, false))
+        return false
+    }
+  }
+  for (const axis of axes) {
+    const target = strengthTarget[axis]
+    if (target != null) {
+      if (
+        !checkAxis(
+          verified.strength_mpa[axis],
+          target,
+          modes.strength,
+          tolerancePct,
+          modes.strength === 'at_least',
+        )
+      )
+        return false
+    }
+  }
+  return true
+}
+
+function checkAxis(
+  value: number,
+  target: number,
+  mode: string,
+  tolerancePct: number,
+  useSlack: boolean,
+): boolean {
+  if (mode === 'about') {
+    return Math.abs(value - target) / target <= tolerancePct / 100
+  }
+  if (mode === 'at_least') {
+    const slack = useSlack ? AT_LEAST_STRENGTH_SLACK : 0
+    return value >= target * (1 - slack)
+  }
+  if (mode === 'at_most') {
+    return value <= target
+  }
+  return true
 }
 
 function applyError(base: number, errScale: number, rand: () => number): number {

@@ -10,7 +10,7 @@ export interface EvalResult {
 /**
  * Evaluate whether a verified value meets a target under the given mode.
  * - about: |value - target| / target × 100 ≤ tolerancePct
- * - at_least: value ≥ target
+ * - at_least: value ≥ target × (1 - slack) (default slack = 0, for strength 0.005)
  * - at_most: value ≤ target
  * - null target: ignored
  */
@@ -19,8 +19,9 @@ export function evaluateAxis(params: {
   value: number
   mode: TargetMode
   tolerancePct: number
+  slack?: number
 }): EvalResult {
-  const { target, value, mode, tolerancePct } = params
+  const { target, value, mode, tolerancePct, slack = 0 } = params
 
   if (target === null || target === undefined) {
     return { status: 'ignored', errorPct: 0 }
@@ -33,7 +34,7 @@ export function evaluateAxis(params: {
     case 'about':
       return { status: errorPct <= tolerancePct ? 'pass' : 'fail', errorPct }
     case 'at_least':
-      return { status: value >= target ? 'pass' : 'fail', errorPct }
+      return { status: value >= target * (1 - slack) ? 'pass' : 'fail', errorPct }
     case 'at_most':
       return { status: value <= target ? 'pass' : 'fail', errorPct }
     default:

@@ -5,6 +5,7 @@ import type {
   HealthResponse,
   Job,
   Material,
+  ReachResponse,
 } from '@/api/types'
 import { apiClient } from '@/api/client'
 import {
@@ -13,6 +14,7 @@ import {
   healthSchema,
   jobSchema,
   materialsListSchema,
+  reachResponseSchema,
   parseResponse,
 } from '@/api/schemas'
 
@@ -24,6 +26,17 @@ export async function getHealth(): Promise<HealthResponse> {
 export async function getMaterials(): Promise<Material[]> {
   const { data } = await apiClient.get('/api/materials')
   return parseResponse(materialsListSchema, data, 'GET /api/materials')
+}
+
+// PROVISIONAL: exact shape unspecified; extractLimits handles whatever comes back
+export async function getLimits(material: string): Promise<unknown> {
+  const { data } = await apiClient.get(`/api/limits`, { params: { material } })
+  return data
+}
+
+export async function checkReach(request: DesignRequest): Promise<ReachResponse> {
+  const { data } = await apiClient.post('/api/reach', request)
+  return parseResponse(reachResponseSchema, data, 'POST /api/reach')
 }
 
 export async function createDesign(request: DesignRequest): Promise<CreateDesignResponse> {

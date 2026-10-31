@@ -28,6 +28,14 @@ export const MODE_LABELS: Record<TargetMode, string> = {
 
 export const MIN_PRINT_DIAMETER_MM = 0.4
 
+export const DATASET_DENSITIES = [0.05, 0.15, 0.25] as const
+
+export const AT_LEAST_STRENGTH_SLACK = 0.005
+
+export const MAX_VIEWER_TILES = 5
+
+export const MAX_STL_TILES = 8
+
 export function jobPath(jobId: string): string {
   return `/job/${jobId}`
 }

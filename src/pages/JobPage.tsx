@@ -4,6 +4,7 @@ import { useJob } from '@/hooks/useJob'
 import { useJobEvents } from '@/hooks/useJobEvents'
 import { StageStepper } from '@/features/job/StageStepper'
 import { ProgressPanel } from '@/features/job/ProgressPanel'
+import { RoundsTimeline } from '@/features/job/RoundsTimeline'
 import { ActivityLog } from '@/features/job/ActivityLog'
 import { TargetChips } from '@/features/job/TargetChips'
 import { CandidateGrid } from '@/features/results/CandidateGrid'
@@ -15,25 +16,28 @@ import { RequestJsonDialog } from '@/features/design-form/RequestJsonDialog'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Badge } from '@/components/ui/badge'
+import { InlineAlert } from '@/components/feedback/InlineAlert'
 import { ErrorState } from '@/components/feedback/ErrorState'
 import { EmptyState } from '@/components/feedback/EmptyState'
 import { useClipboard } from '@/hooks/useClipboard'
 import { loadRequest } from '@/lib/storage'
 import { fmtDuration } from '@/lib/format'
-import { evaluateAxis, allTargetsMet } from '@/lib/compare'
-import { AXES } from '@/config/constants'
 import type { ApiError } from '@/api/client'
 import type { Candidate, DesignRequest } from '@/api/types'
 import type { ViewMode, SortKey } from '@/features/results/ResultsToolbar'
-import { Copy, Plus } from 'lucide-react'
+import { Copy, Plus, RotateCcw } from 'lucide-react'
 
 export default function JobPage() {
   const { jobId } = useParams<{ jobId: string }>()
   const { data: job, isLoading, error, refetch } = useJob(jobId!)
-  const isTerminal = job?.status === 'done' || job?.status === 'failed'
+  const isTerminal = job?.status === 'done' || job?.status === 'failed' || job?.status === 'cancelled'
   const events = useJobEvents(jobId!, !isTerminal)
 
-  const request = useMemo(() => loadRequest(jobId!), [jobId])
+  // Echoed request from backend has priority, otherwise locally stored request
+  const storedRequest = useMemo(() => loadRequest(jobId!), [jobId])
+  const request: (DesignRequest & { _metadata?: { adjustedFields?: string[] } }) | null =
+    (job?.request as DesignRequest) ?? storedRequest
 
   const [viewMode, setViewMode] = useState<ViewMode>('cards')
   const [sortKey, setSortKey] = useState<SortKey>('rank')
@@ -105,20 +109,41 @@ export default function JobPage() {
 
   if (!job) return null
 
+  // CANCELLED
+  if (job.status === 'cancelled') {
+    return (
+      <div className="animate-fade-in space-y-6">
+        <PageHeader title={`Run ${jobId}`} />
+        <ErrorState
+          title="This run was cancelled"
+          message={job.message || 'The search job was cancelled before finishing.'}
+          onBack={() => navigate('/')}
+          backLabel="Back to design form"
+        />
+      </div>
+    )
+  }
+
   // FAILED
   if (job.status === 'failed') {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 animate-fade-in">
         <PageHeader title={`Run ${jobId}`} />
         <ErrorState
           title="Job failed"
           message={job.message}
           onBack={() => navigate('/')}
-        ></ErrorState>
+        />
         <div className="flex justify-center gap-3">
           <Link to="/">
             <Button variant="secondary" size="sm">
-              <Plus className="h-3.5 w-3.5" />
+              <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+              Edit target & retry
+            </Button>
+          </Link>
+          <Link to="/">
+            <Button variant="outline" size="sm">
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
               New design
             </Button>
           </Link>
@@ -129,6 +154,10 @@ export default function JobPage() {
 
   // QUEUED / RUNNING
   if (job.status === 'queued' || job.status === 'running') {
+    const queueMsg = job.queue_position
+      ? `Waiting in queue (position ${job.queue_position})`
+      : 'Waiting in queue'
+
     return (
       <div className="animate-fade-in space-y-6">
         <PageHeader title={`Run ${jobId}`}>
@@ -147,17 +176,40 @@ export default function JobPage() {
         </PageHeader>
 
         <p className="text-muted text-xs">
-          This job continues in the background. You can leave and reopen this URL.
+          This run continues in the background. You can leave this page; this URL reopens it.
         </p>
+
+        {job.warnings && job.warnings.length > 0 && (
+          <div className="space-y-1">
+            {job.warnings.map((w, i) => (
+              <InlineAlert key={i} variant="warning">
+                {w}
+              </InlineAlert>
+            ))}
+          </div>
+        )}
 
         <StageStepper currentStage={stage} status={job.status} />
 
         <ProgressPanel
           progress={job.status === 'queued' ? 0 : progress}
-          message={job.status === 'queued' ? 'Waiting in queue' : message}
+          message={job.status === 'queued' ? queueMsg : message}
         />
 
+        {job.reach && (
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-muted">Dataset reach:</span>
+            <Badge variant="accent">
+              {job.reach.level} ({job.reach.distance_pct.toFixed(1)}% distance)
+            </Badge>
+          </div>
+        )}
+
         {request && <TargetChips request={request} />}
+
+        {job.rounds && job.rounds.length > 0 && (
+          <RoundsTimeline rounds={job.rounds} currentRound={job.round} />
+        )}
 
         <ActivityLog messages={events.messages} className="mt-4" />
       </div>
@@ -168,12 +220,10 @@ export default function JobPage() {
   const candidates = job.candidates
   const sortedCandidates = sortCandidates(candidates, sortKey)
 
-  const filteredCandidates =
-    onlyMeeting && request
-      ? sortedCandidates.filter((c) => candidateMeetsAll(c, request))
-      : sortedCandidates
-
-  const allMet = request ? candidates.every((c) => candidateMeetsAll(c, request)) : true
+  // Rule 1: The solver decides. Never present a design as a match unless server says matches_targets
+  const filteredCandidates = onlyMeeting
+    ? sortedCandidates.filter((c) => c.matches_targets)
+    : sortedCandidates
 
   return (
     <div className="animate-fade-in space-y-6">
@@ -185,12 +235,18 @@ export default function JobPage() {
         onShowJson={() => setShowJson(true)}
       />
 
-      <ResultsBanner candidateCount={candidates.length} allMet={allMet} />
+      <ResultsBanner
+        candidates={candidates}
+        request={request}
+        reach={job.reach}
+        infeasible={job.infeasible}
+        warnings={job.warnings}
+      />
 
       {candidates.length === 0 && (
         <EmptyState
           title="No designs came back"
-          message="Try relaxing the tolerance, raising the mass limit, or reducing the stiffness target."
+          message="No valid design met the constraints. Try relaxing the tolerance, raising the mass limit, or reducing stiffness."
         >
           <Link to="/">
             <Button variant="secondary" size="sm">
@@ -231,6 +287,12 @@ export default function JobPage() {
         <ComparisonMatrix candidates={filteredCandidates} jobId={jobId!} request={request} />
       )}
 
+      {job.rounds && job.rounds.length > 0 && (
+        <div className="mt-8 border-t border-line/60 pt-6">
+          <RoundsTimeline rounds={job.rounds} currentRound={job.round} />
+        </div>
+      )}
+
       {!request && candidates.length > 0 && (
         <p className="text-muted text-center text-xs">
           Target not available for this run (opened in a different browser). Pass/fail markers are
@@ -259,38 +321,4 @@ function sortCandidates(candidates: Candidate[], key: SortKey): Candidate[] {
     default:
       return sorted
   }
-}
-
-function candidateMeetsAll(candidate: Candidate, request: DesignRequest): boolean {
-  const tolerance = request.tolerance_pct
-  const results = []
-
-  for (const axis of AXES) {
-    const target = request.target.stiffness_gpa[axis]
-    results.push(
-      evaluateAxis({
-        target,
-        value: candidate.verified.stiffness_gpa[axis],
-        mode: request.modes.stiffness,
-        tolerancePct: tolerance,
-      }),
-    )
-  }
-
-  const strengthKey = 'strength_mpa' in request.target ? 'strength_mpa' : 'yield_strength_mpa'
-  const strengthTargets = request.target[strengthKey as keyof typeof request.target] as
-    Record<string, number | null> | undefined
-  for (const axis of AXES) {
-    const target = (strengthTargets?.[axis] ?? null) as number | null
-    results.push(
-      evaluateAxis({
-        target,
-        value: candidate.verified.strength_mpa[axis],
-        mode: request.modes.strength,
-        tolerancePct: tolerance,
-      }),
-    )
-  }
-
-  return allTargetsMet(results)
 }

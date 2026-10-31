@@ -30,6 +30,30 @@ describe('evaluateAxis', () => {
     expect(result.status).toBe('fail')
   })
 
+  it('supports strength at_least 0.5% slack: shortfall <= 0.5% is not a miss', () => {
+    // 99.6 is 0.4% shortfall (< 0.5% slack)
+    const result = evaluateAxis({
+      target: 100,
+      value: 99.6,
+      mode: 'at_least',
+      tolerancePct: 10,
+      slack: 0.005,
+    })
+    expect(result.status).toBe('pass')
+  })
+
+  it('supports strength at_least 0.5% slack: shortfall > 0.5% is a miss', () => {
+    // 99.4 is 0.6% shortfall (> 0.5% slack)
+    const result = evaluateAxis({
+      target: 100,
+      value: 99.4,
+      mode: 'at_least',
+      tolerancePct: 10,
+      slack: 0.005,
+    })
+    expect(result.status).toBe('fail')
+  })
+
   it('passes "at_most" mode when value is below target', () => {
     const result = evaluateAxis({ target: 50, value: 40, mode: 'at_most', tolerancePct: 10 })
     expect(result.status).toBe('pass')

@@ -11,7 +11,8 @@
     "test": "vitest",
     "test:run": "vitest run",
     "typecheck": "tsc -b --noEmit",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "sync:mocks": "node scripts/sync-mocks.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^6.0.2",

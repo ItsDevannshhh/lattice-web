@@ -10,7 +10,10 @@ function parseNum(v: string): number | null {
  * Builds a DesignRequest from form values.
  * Implements XOR rules for strength type and weight type.
  */
-export function buildRequest(values: DesignFormValues): DesignRequest {
+export function buildRequest(
+  values: DesignFormValues,
+  options?: { force?: boolean },
+): DesignRequest {
   // Stiffness: respect "same in all directions" and "don't care"
   const stiffX = values.stiffnessDontCareX ? null : parseNum(values.stiffnessX)
   let stiffY = values.stiffnessDontCareY ? null : parseNum(values.stiffnessY)
@@ -64,5 +67,6 @@ export function buildRequest(values: DesignFormValues): DesignRequest {
     },
     tolerance_pct: parseNum(values.tolerancePct) ?? 10,
     n_results: parseInt(values.nResults, 10) || 5,
+    ...(options?.force ? { force: true } : {}),
   }
 }

@@ -39,39 +39,40 @@ function openSseEvents(jobId: string, handlers: JobEventHandlers): () => void {
 
 function openMockEvents(jobId: string, handlers: JobEventHandlers): () => void {
   let cancelled = false
+  let interval: ReturnType<typeof setInterval> | null = null
 
   // Lazy import to avoid bundling mock code in production
   import('@/mocks/jobSim').then(({ simulateJob }) => {
     if (cancelled) return
 
     const startTime = getMockJobStart(jobId)
-    const interval = setInterval(() => {
-      if (cancelled) return
+    const scenario = getMockJobScenario(jobId)
+    interval = setInterval(() => {
+      if (cancelled) {
+        if (interval) clearInterval(interval)
+        return
+      }
       const elapsed = (Date.now() - startTime) / 1000
-      const state = simulateJob(elapsed)
+      const state = simulateJob(elapsed, scenario)
       handlers.onEvent({
         stage: state.stage,
         progress: state.progress,
         message: state.message,
       })
-      if (state.status === 'done' || state.status === 'failed') {
-        clearInterval(interval)
+      if (
+        state.status === 'done' ||
+        state.status === 'failed' ||
+        state.status === 'cancelled'
+      ) {
+        if (interval) clearInterval(interval)
       }
     }, 500)
-
-    // Provide cleanup
-    const originalCancel = cancel
-    cancel = () => {
-      originalCancel()
-      clearInterval(interval)
-    }
   })
 
-  let cancel = () => {
+  return () => {
     cancelled = true
+    if (interval) clearInterval(interval)
   }
-
-  return () => cancel()
 }
 
 function getMockJobStart(jobId: string): number {
@@ -85,4 +86,17 @@ function getMockJobStart(jobId: string): number {
     // Ignore
   }
   return Date.now()
+}
+
+function getMockJobScenario(jobId: string): string | undefined {
+  try {
+    const raw = localStorage.getItem(`mock:job:${jobId}`)
+    if (raw) {
+      const parsed = JSON.parse(raw) as { scenario?: string }
+      return parsed.scenario
+    }
+  } catch {
+    // Ignore
+  }
+  return undefined
 }

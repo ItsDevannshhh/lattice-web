@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
 import { useMaterials } from '@/hooks/useMaterials'
 import { useCreateDesign } from '@/hooks/useCreateDesign'
+import { useReach } from '@/hooks/useReach'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Select, SelectItem } from '@/components/ui/select'
@@ -14,18 +15,22 @@ import { Badge } from '@/components/ui/badge'
 import { InfoTip } from '@/components/ui/info-tip'
 import { InlineAlert } from '@/components/feedback/InlineAlert'
 import { ErrorState } from '@/components/feedback/ErrorState'
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { AxisFields } from '@/features/design-form/AxisFields'
 import { ModeSelector } from '@/features/design-form/ModeSelector'
+import { ReachBadge } from '@/features/design-form/ReachBadge'
+import { ClosestAchievable } from '@/features/design-form/ClosestAchievable'
 import { SummaryPanel } from '@/features/design-form/SummaryPanel'
-import { formSchema } from '@/features/design-form/formSchema'
+import { createFormSchema } from '@/features/design-form/formSchema'
 import { buildRequest } from '@/features/design-form/buildRequest'
 import { DEFAULT_VALUES, EXAMPLE_VALUES } from '@/features/design-form/defaults'
 import type { DesignFormValues } from '@/features/design-form/defaults'
-import type { TargetMode } from '@/api/types'
+import type { DesignRequest, ReachResponse, TargetMode } from '@/api/types'
 import type { ApiError } from '@/api/client'
-import { tilesPerAxis, isIntegerMultiple } from '@/lib/units'
+import { tilesPerAxis, isIntegerMultiple, partVolumeCm3, solidMassG } from '@/lib/units'
+import { DATASET_DENSITIES } from '@/config/constants'
 import { FORM_BOUNDS } from '@/config/limits'
-import { Beaker, ChevronDown, RotateCcw, Settings } from 'lucide-react'
+import { Beaker, ChevronDown, RotateCcw, Settings, AlertTriangle } from 'lucide-react'
 
 export function DesignForm() {
   const {
@@ -39,6 +44,13 @@ export function DesignForm() {
   const [showAdvStrength, setShowAdvStrength] = useState(false)
   const [showAdvWeight, setShowAdvWeight] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [forceConfirmOpen, setForceConfirmOpen] = useState(false)
+
+  // Track user-adjusted fields (from accepting reach suggestions)
+  const [adjustedFields, setAdjustedFields] = useState<Set<string>>(new Set())
+  const [storedOriginalValues, setStoredOriginalValues] = useState<Partial<DesignFormValues>>({})
+
+  const schema = useMemo(() => createFormSchema(materials), [materials])
 
   const {
     register,
@@ -50,29 +62,139 @@ export function DesignForm() {
   } = useForm<DesignFormValues>({
     defaultValues: DEFAULT_VALUES,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    resolver: zodResolver(formSchema) as any,
+    resolver: zodResolver(schema) as any,
     mode: 'onTouched',
     reValidateMode: 'onChange',
   })
 
   const formValues = watch()
 
-  const onSubmit = handleSubmit((data: DesignFormValues) => {
-    setSubmitError(null)
-    const request = buildRequest(data)
-    createDesign.mutate(request, {
-      onError: (err: Error) => {
-        const apiErr = err as ApiError
-        const msg = apiErr.message ?? 'An error occurred'
-        setSubmitError(msg)
-        toast.error(msg)
-      },
+  // Debounced request calculation for reach query (400ms)
+  const [debouncedRequest, setDebouncedRequest] = useState<DesignRequest | null>(null)
+  const [debouncedHash, setDebouncedHash] = useState('')
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        const req = buildRequest(formValues)
+        // Check if there is at least one target before triggering reach
+        const hasTarget =
+          Object.values(req.target.stiffness_gpa).some((v) => v !== null) ||
+          ('strength_mpa' in req.target &&
+            Object.values(req.target.strength_mpa).some((v) => v !== null)) ||
+          ('yield_strength_mpa' in req.target &&
+            Object.values(req.target.yield_strength_mpa).some((v) => v !== null))
+
+        if (hasTarget && req.material) {
+          setDebouncedRequest(req)
+          setDebouncedHash(JSON.stringify(req))
+        } else {
+          setDebouncedRequest(null)
+          setDebouncedHash('')
+        }
+      } catch {
+        setDebouncedRequest(null)
+        setDebouncedHash('')
+      }
+    }, 400)
+
+    return () => clearTimeout(timer)
+  }, [formValues])
+
+  const { data: reachData } = useReach(debouncedRequest, debouncedHash)
+
+  const handleAcceptNearest = (nearest: ReachResponse['nearest']) => {
+    // Save current values to restore later on Undo
+    setStoredOriginalValues({
+      stiffnessX: formValues.stiffnessX,
+      stiffnessY: formValues.stiffnessY,
+      stiffnessZ: formValues.stiffnessZ,
+      strengthX: formValues.strengthX,
+      strengthY: formValues.strengthY,
+      strengthZ: formValues.strengthZ,
     })
-  })
+
+    const newAdjusted = new Set(adjustedFields)
+
+    if (nearest.stiffness_gpa[0] != null) {
+      setValue('stiffnessX', nearest.stiffness_gpa[0].toFixed(2), { shouldValidate: true })
+      newAdjusted.add('stiffnessX')
+    }
+    if (nearest.stiffness_gpa[1] != null && !formValues.stiffnessSameAll) {
+      setValue('stiffnessY', nearest.stiffness_gpa[1].toFixed(2), { shouldValidate: true })
+      newAdjusted.add('stiffnessY')
+    }
+    if (nearest.stiffness_gpa[2] != null && !formValues.stiffnessSameAll) {
+      setValue('stiffnessZ', nearest.stiffness_gpa[2].toFixed(2), { shouldValidate: true })
+      newAdjusted.add('stiffnessZ')
+    }
+
+    if (nearest.strength_mpa[0] != null) {
+      setValue('strengthX', nearest.strength_mpa[0].toFixed(1), { shouldValidate: true })
+      newAdjusted.add('strengthX')
+    }
+    if (nearest.strength_mpa[1] != null && !formValues.strengthSameAll) {
+      setValue('strengthY', nearest.strength_mpa[1].toFixed(1), { shouldValidate: true })
+      newAdjusted.add('strengthY')
+    }
+    if (nearest.strength_mpa[2] != null && !formValues.strengthSameAll) {
+      setValue('strengthZ', nearest.strength_mpa[2].toFixed(1), { shouldValidate: true })
+      newAdjusted.add('strengthZ')
+    }
+
+    setAdjustedFields(newAdjusted)
+    toast.success('Applied nearest achievable values to targets.')
+  }
+
+  const handleUndoAdjustments = () => {
+    if (storedOriginalValues.stiffnessX) setValue('stiffnessX', storedOriginalValues.stiffnessX)
+    if (storedOriginalValues.stiffnessY) setValue('stiffnessY', storedOriginalValues.stiffnessY)
+    if (storedOriginalValues.stiffnessZ) setValue('stiffnessZ', storedOriginalValues.stiffnessZ)
+    if (storedOriginalValues.strengthX) setValue('strengthX', storedOriginalValues.strengthX)
+    if (storedOriginalValues.strengthY) setValue('strengthY', storedOriginalValues.strengthY)
+    if (storedOriginalValues.strengthZ) setValue('strengthZ', storedOriginalValues.strengthZ)
+
+    setAdjustedFields(new Set())
+    setStoredOriginalValues({})
+    toast.info('Restored requested targets.')
+  }
+
+  const submitWithForce = (force: boolean) => {
+    setSubmitError(null)
+    const request = buildRequest(formValues, { force })
+    createDesign.mutate(
+      { request, metadata: { adjustedFields: Array.from(adjustedFields) } },
+      {
+        onError: (err: Error) => {
+          const apiErr = err as ApiError
+          const msg = apiErr.message ?? 'An error occurred'
+          setSubmitError(msg)
+          toast.error(msg)
+        },
+      },
+    )
+  }
+
+  const onError = () => {
+    const firstError = document.querySelector('[aria-invalid="true"]')
+    if (firstError) {
+      firstError.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      ;(firstError as HTMLElement).focus?.()
+    }
+  }
+
+  const onSubmit = handleSubmit((_data: DesignFormValues) => {
+    if (reachData?.level === 'infeasible') {
+      setForceConfirmOpen(true)
+      return
+    }
+    submitWithForce(false)
+  }, onError)
 
   const fillExample = () => {
     const matId = materials?.find((m) => m.id === 'ti64')?.id ?? materials?.[0]?.id ?? ''
     reset({ ...EXAMPLE_VALUES, material: matId })
+    setAdjustedFields(new Set())
   }
 
   // Computed hints
@@ -89,12 +211,63 @@ export function DesignForm() {
       ? 'Part size is not an integer multiple of cell size'
       : undefined
 
+  // Density & Mass warnings
+  const selectedMaterial = materials?.find((m) => m.id === formValues.material)
+  const partVol = partVolumeCm3([sizeX, sizeY, sizeZ])
+  const solidMass = selectedMaterial ? solidMassG(partVol, selectedMaterial.density_g_cm3) : 0
+
+  let massWarning: string | undefined
+  if (selectedMaterial && solidMass > 0 && !formValues.useRelDensity) {
+    const massNum = parseFloat(formValues.maxMassG)
+    if (isFinite(massNum) && massNum > 0) {
+      const impliedRd = massNum / solidMass
+      if (impliedRd < 0.05) {
+        const minMass = (0.05 * solidMass).toFixed(1)
+        massWarning = `Lightest possible mass ≈ ${minMass} g (estimate for ρ = 0.05)`
+      } else if (impliedRd > 0.25) {
+        massWarning = 'The search will use ρ = 0.25 (maximum dataset density)'
+      }
+    }
+  }
+
+  let relDensityWarning: string | undefined
+  if (formValues.useRelDensity) {
+    const rdNum = parseFloat(formValues.relDensity)
+    if (
+      isFinite(rdNum) &&
+      rdNum > 0 &&
+      rdNum < 1 &&
+      !DATASET_DENSITIES.some((d) => Math.abs(d - rdNum) < 0.001)
+    ) {
+      relDensityWarning = 'The predictor was not trained or tested between the dataset densities (0.05, 0.15, 0.25).'
+    }
+  }
+
+  const isInfeasible = reachData?.level === 'infeasible'
+
   return (
     <form onSubmit={onSubmit} noValidate>
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[1fr_320px]">
         {/* Left: form sections */}
         <div className="space-y-5">
-          {submitError && <InlineAlert variant="error">{submitError}</InlineAlert>}
+          {submitError && (
+            <InlineAlert variant="error">
+              <div className="flex flex-col gap-2">
+                <span>{submitError}</span>
+                {isInfeasible && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="self-start text-xs"
+                    onClick={() => setForceConfirmOpen(true)}
+                  >
+                    Run anyway (override bound checks)
+                  </Button>
+                )}
+              </div>
+            </InlineAlert>
+          )}
 
           {/* Material */}
           <Card>
@@ -174,6 +347,7 @@ export function DesignForm() {
                 errors={errors}
                 watch={watch}
                 setValue={setValue as (name: keyof DesignFormValues, value: unknown) => void}
+                adjustedFields={adjustedFields}
               />
             </CardContent>
           </Card>
@@ -204,6 +378,7 @@ export function DesignForm() {
                 errors={errors}
                 watch={watch}
                 setValue={setValue as (name: keyof DesignFormValues, value: unknown) => void}
+                adjustedFields={adjustedFields}
               />
 
               <button
@@ -214,12 +389,12 @@ export function DesignForm() {
                 <ChevronDown
                   className={`h-3.5 w-3.5 transition-transform ${showAdvStrength ? 'rotate-180' : ''}`}
                 />
-                Advanced
+                Advanced strength definition
               </button>
 
               {showAdvStrength && (
                 <div className="border-line animate-fade-in space-y-2 border-l-2 pl-3">
-                  <p className="text-muted text-xs">Strength definition</p>
+                  <p className="text-muted text-xs">Strength failure criterion</p>
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
@@ -230,7 +405,7 @@ export function DesignForm() {
                           : 'border-line text-muted hover:text-text'
                       }`}
                     >
-                      Effective (yield & buckling)
+                      Effective strength (yield & buckling) [Default]
                     </button>
                     <button
                       type="button"
@@ -248,6 +423,23 @@ export function DesignForm() {
               )}
             </CardContent>
           </Card>
+
+          {/* Reachability & Dataset Coverage */}
+          {reachData && (
+            <div className="space-y-3">
+              <ReachBadge
+                level={reachData.level}
+                distancePct={reachData.distance_pct}
+                message={reachData.message}
+              />
+              <ClosestAchievable
+                reach={reachData}
+                isAdjusted={adjustedFields.size > 0}
+                onAccept={handleAcceptNearest}
+                onUndo={handleUndoAdjustments}
+              />
+            </div>
+          )}
 
           {/* Weight & Part */}
           <Card>
@@ -267,6 +459,7 @@ export function DesignForm() {
                   label="Max mass"
                   unit="g"
                   error={errors.maxMassG?.message}
+                  warning={massWarning}
                   placeholder="60"
                 />
               ) : (
@@ -274,9 +467,10 @@ export function DesignForm() {
                   {...register('relDensity')}
                   label="Relative density"
                   unit="—"
-                  hint="0 < ρ < 1"
+                  hint="Dataset densities: 0.05, 0.15, 0.25"
                   error={errors.relDensity?.message}
-                  placeholder="0.12"
+                  warning={relDensityWarning}
+                  placeholder="0.15"
                 />
               )}
 
@@ -325,16 +519,19 @@ export function DesignForm() {
                 <ChevronDown
                   className={`h-3.5 w-3.5 transition-transform ${showAdvWeight ? 'rotate-180' : ''}`}
                 />
-                Advanced
+                Advanced density settings
               </button>
 
               {showAdvWeight && (
-                <div className="border-line animate-fade-in border-l-2 pl-3">
+                <div className="border-line animate-fade-in space-y-2 border-l-2 pl-3">
                   <Switch
                     checked={formValues.useRelDensity}
                     onChange={(v) => setValue('useRelDensity', v)}
                     label="Specify relative density instead of mass"
                   />
+                  <p className="text-muted text-xs">
+                    Default dataset densities are 0.05, 0.15, 0.25. Non-dataset densities trigger extra solver iterations.
+                  </p>
                 </div>
               )}
             </CardContent>
@@ -383,7 +580,15 @@ export function DesignForm() {
                 <Beaker className="h-3.5 w-3.5" />
                 Fill example
               </Button>
-              <Button type="button" variant="ghost" size="sm" onClick={() => reset(DEFAULT_VALUES)}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  reset(DEFAULT_VALUES)
+                  setAdjustedFields(new Set())
+                }}
+              >
                 <RotateCcw className="h-3.5 w-3.5" />
                 Reset
               </Button>
@@ -391,10 +596,11 @@ export function DesignForm() {
             <Button
               type="submit"
               size="lg"
+              variant={isInfeasible ? 'danger' : 'primary'}
               loading={createDesign.isPending}
               className="min-w-[140px]"
             >
-              Design
+              {isInfeasible ? 'Run anyway' : 'Design'}
             </Button>
           </div>
         </div>
@@ -409,6 +615,41 @@ export function DesignForm() {
           <SummaryPanel values={formValues} />
         </div>
       </div>
+
+      {/* Confirmation Dialog for Infeasible Target */}
+      <Dialog open={forceConfirmOpen} onOpenChange={setForceConfirmOpen}>
+        <DialogContent className="max-w-md">
+          <DialogTitle className="flex items-center gap-2 text-danger">
+            <AlertTriangle className="h-5 w-5" />
+            Target Marked Infeasible
+          </DialogTitle>
+          <DialogDescription className="text-sm">
+            The target exceeds the physical bounds of beam lattices at this density (stiffness sum &gt; 1.05 &times; &rho; &times; E<sub>s</sub> or strength exceeding maximum).
+            The backend physics search is very likely to return shortfalls.
+          </DialogDescription>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setForceConfirmOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              size="sm"
+              onClick={() => {
+                setForceConfirmOpen(false)
+                submitWithForce(true)
+              }}
+            >
+              Force Run
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </form>
   )
 }

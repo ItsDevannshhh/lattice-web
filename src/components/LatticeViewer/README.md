@@ -16,22 +16,18 @@ This keeps `three.js` out of the main bundle until the viewer is needed.
 
 See `types.ts` for the full `LatticeViewerProps` interface.
 
-- **`lattice`**: The exact API contract shape (`octant27` format). The viewer is responsible for mirroring about x=0, y=0, z=0 to get the full cell from [-1,1]³, merging coincident struts, and tiling by shifting 2 units per axis.
+- **`lattice`**: The exact API contract shape (`octant27` format): 27 nodes in [0,1]³ plus edge list.
 - **`tiles`**: Number of cells per side (1–5), default 1.
-- **`variant`**: `'thumbnail'` (non-interactive, cheap, many can mount at once) or `'full'` (orbit, zoom).
+- **`variant`**: `'thumbnail'` (non-interactive, cheap, many mount at once) or `'full'` (orbit, zoom).
 - **`renderMode`**: `'solid'` (default) or `'wireframe'`.
-- **`colorByAxis`**: When true, colour struts by their dominant axis direction (x=red, y=green, z=blue).
+- **`colorByAxis`**: When true, colour struts by dominant axis direction (x=rose, y=green, z=blue).
 - **`className`**: The parent sizes the container; the viewer fills 100% width/height.
+- **`onError`**: Callback to report WebGL context loss (`webglcontextlost`) or rendering failure.
 
-## Responsibilities
+## Implementation Guidelines for Teammate C
 
-| Concern                                          | Owner                      |
-| ------------------------------------------------ | -------------------------- |
-| Tile count, render mode, color-by-axis controls  | Frontend (passed as props) |
-| Orbit, zoom, camera                              | Viewer (teammate C)        |
-| Mirroring, merging, tiling the octant27 data     | Viewer                     |
-| Optional `showControls` prop for viewer-owned UI | Viewer (stretch)           |
-
-## Performance Notes
-
-Many thumbnail viewers may mount simultaneously in the results grid. Avoid creating a separate heavy WebGL context per card — consider a shared canvas, instanced rendering, or fallback to the SVG placeholder for thumbnails.
+1. **Cell Rebuilding**: Rebuild the full cell [-1,1]³ by mirroring about x=0, y=0, z=0. Merge identical struts. Tile by shifting 2 units per axis. The cell spans 2 units = `cell_size_mm`. Face struts appear on both faces for drawing.
+2. **Strut Radius**: `strut_radius_mm` is already in millimeters.
+3. **Thumbnail Performance**: Thumbnails must be cheap since many mount simultaneously in the results grid. Avoid one heavy WebGL context per card (e.g. use lightweight canvas/SVG or shared renderer).
+4. **WebGL Context Loss**: Handle `webglcontextlost` events and trigger the `onError` prop so the UI can gracefully fallback to the placeholder.
+5. **Coordinate System**: STL export is Z-up while three.js is Y-up (rotate once, on export only).

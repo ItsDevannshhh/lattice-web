@@ -5,6 +5,7 @@ import type { Lattice } from '@/api/types'
 export interface StlOptions {
   tiles: [number, number, number]
   filename?: string
+  sides?: 8 | 12
 }
 
 /**
