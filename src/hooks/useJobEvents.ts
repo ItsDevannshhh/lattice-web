@@ -29,7 +29,7 @@ export function useJobEvents(jobId: string, enabled: boolean) {
               : [...prev.messages, { message: event.message, timestamp: Date.now() }].slice(-50)
 
           return {
-            stage: event.stage,
+            stage: event.stage ?? prev.stage,
             progress: Math.max(prev.progress, event.progress), // Monotonic
             messages: newMessages,
           }

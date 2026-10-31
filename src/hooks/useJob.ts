@@ -10,7 +10,7 @@ export function useJob(jobId: string) {
     queryFn: () => getJob(jobId),
     refetchInterval: (query) => {
       const status = query.state.data?.status
-      if (status === 'done' || status === 'failed') return false
+      if (status === 'done' || status === 'failed' || status === 'cancelled') return false
       return USE_MOCK ? 1000 : 1500
     },
   })

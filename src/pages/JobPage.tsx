@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
+import { cancelJob } from '@/api/endpoints'
+import { queryKeys } from '@/api/queryKeys'
 import { useJob } from '@/hooks/useJob'
 import { useJobEvents } from '@/hooks/useJobEvents'
 import { StageStepper } from '@/features/job/StageStepper'
@@ -26,7 +30,7 @@ import { fmtDuration } from '@/lib/format'
 import type { ApiError } from '@/api/client'
 import type { Candidate, DesignRequest } from '@/api/types'
 import type { ViewMode, SortKey } from '@/features/results/ResultsToolbar'
-import { Copy, Plus, RotateCcw } from 'lucide-react'
+import { Copy, Plus, RotateCcw, XCircle } from 'lucide-react'
 
 export default function JobPage() {
   const { jobId } = useParams<{ jobId: string }>()
@@ -46,6 +50,15 @@ export default function JobPage() {
   const [showJson, setShowJson] = useState(false)
   const { copy } = useClipboard()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const cancel = useMutation({
+    mutationFn: () => cancelJob(jobId!),
+    onSuccess: (r) => {
+      toast.info(r.status === 'cancelled' ? 'Run cancelled' : 'Stopping after the current search round…')
+      void queryClient.invalidateQueries({ queryKey: queryKeys.job(jobId!) })
+    },
+    onError: () => toast.error('Could not cancel the run'),
+  })
 
   // Elapsed timer
   useEffect(() => {
@@ -110,7 +123,7 @@ export default function JobPage() {
   if (!job) return null
 
   // CANCELLED
-  if (job.status === 'cancelled') {
+  if (job.status === 'cancelled' && job.candidates.length === 0) {
     return (
       <div className="animate-fade-in space-y-6">
         <PageHeader title={`Run ${jobId}`} />
@@ -172,6 +185,15 @@ export default function JobPage() {
             >
               <Copy className="h-4 w-4" />
             </button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => cancel.mutate()}
+              disabled={cancel.isPending}
+            >
+              <XCircle className="mr-1.5 h-3.5 w-3.5" />
+              Cancel run
+            </Button>
           </div>
         </PageHeader>
 
@@ -234,6 +256,12 @@ export default function JobPage() {
         request={request}
         onShowJson={() => setShowJson(true)}
       />
+
+      {job.status === 'cancelled' && (
+        <InlineAlert variant="warning">
+          This run was cancelled. {job.message || 'Showing the best designs found so far.'}
+        </InlineAlert>
+      )}
 
       <ResultsBanner
         candidates={candidates}
