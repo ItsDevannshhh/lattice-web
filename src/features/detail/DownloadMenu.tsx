@@ -8,7 +8,7 @@ import {
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu'
 import { useClipboard } from '@/hooks/useClipboard'
-import { buildStl } from '@/lib/stl'
+import { buildStlBuffer } from '@/lib/stl'
 import { MAX_STL_TILES, MAX_VIEWER_TILES } from '@/config/constants'
 import { Copy, Download, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -38,10 +38,13 @@ export function DownloadMenu({ candidate, tiles, request }: DownloadMenuProps) {
         toast.warning(`Exporting high tile count (${tileCounts.join('×')}). May result in a large file.`)
       }
 
-      const blob = await buildStl(candidate.lattice, {
-        tiles: tileCounts,
-        filename: `${candidate.id}.stl`,
-      })
+      const result = buildStlBuffer(candidate.lattice, { tiles: tileCounts, filename: `${candidate.id}.stl` })
+      if (result.reducedSides) {
+        toast.warning(
+          `Large file (${(result.triangles / 1e6).toFixed(1)} M triangles): struts built with 8 sides instead of 12.`,
+        )
+      }
+      const blob = new Blob([result.buffer], { type: 'model/stl' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -49,8 +52,8 @@ export function DownloadMenu({ candidate, tiles, request }: DownloadMenuProps) {
       a.click()
       URL.revokeObjectURL(url)
       toast.success('STL downloaded')
-    } catch {
-      toast.info('STL export is being finished by the viewer module')
+    } catch (err) {
+      toast.error(`STL export failed: ${err instanceof Error ? err.message : 'unknown error'}`)
     } finally {
       setStlLoading(false)
     }

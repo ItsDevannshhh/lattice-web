@@ -51,11 +51,20 @@ function nodeKey(p: [number, number, number]): string {
  * Rebuild full unit cell [-1, 1]³ from octant [0, 1]³ by mirroring across x=0, y=0, z=0,
  * and tile across N x N x N cells, deduplicating struts on symmetry planes and shared faces.
  */
+export type Tiles = number | [number, number, number]
+
+export function normalizeTiles(tiles: Tiles, max = 5): [number, number, number] {
+  const t = Array.isArray(tiles) ? tiles : [tiles, tiles, tiles]
+  const c = (v: number) => Math.max(1, Math.min(max, Math.floor(v)))
+  return [c(t[0]), c(t[1]), c(t[2])]
+}
+
 export function buildTiledLattice(
   lattice: Lattice,
-  tiles = 1,
+  tiles: Tiles = 1,
+  maxTiles = 5,
 ): RebuiltLattice3D {
-  const clampedTiles = Math.max(1, Math.min(5, Math.floor(tiles)))
+  const [tilesX, tilesY, tilesZ] = normalizeTiles(tiles, maxTiles)
   const octantNodes = lattice.nodes
   const octantEdges = lattice.edges
 
@@ -78,14 +87,12 @@ export function buildTiledLattice(
   // Unit cell size in model units is 2 (spans [-1, 1])
   // Tiling offset step = 2
   // We center the whole assembly by subtracting (clampedTiles - 1)
-  const centerOffset = clampedTiles - 1
-
-  for (let tx = 0; tx < clampedTiles; tx++) {
-    for (let ty = 0; ty < clampedTiles; ty++) {
-      for (let tz = 0; tz < clampedTiles; tz++) {
-        const shiftX = 2 * tx - centerOffset
-        const shiftY = 2 * ty - centerOffset
-        const shiftZ = 2 * tz - centerOffset
+  for (let tx = 0; tx < tilesX; tx++) {
+    for (let ty = 0; ty < tilesY; ty++) {
+      for (let tz = 0; tz < tilesZ; tz++) {
+        const shiftX = 2 * tx - (tilesX - 1)
+        const shiftY = 2 * ty - (tilesY - 1)
+        const shiftZ = 2 * tz - (tilesZ - 1)
 
         // For each of the 8 octants
         for (const [sx, sy, sz] of signs) {
@@ -152,26 +159,67 @@ export function buildTiledLattice(
     position,
   }))
 
-  // Model-normalized strut radius:
-  // 1 model unit corresponds to cell_size_mm / 2
-  // radius_model = strut_radius_mm / (cell_size_mm / 2)
-  const cellSize = lattice.cell_size_mm || 10
-  const strutRadiusMm = lattice.strut_radius_mm || 0.3
-  const strutRadius = Math.max(0.02, Math.min(0.25, (2 * strutRadiusMm) / cellSize))
-
-  const minVal = -clampedTiles
-  const maxVal = clampedTiles
-  const sizeVal = 2 * clampedTiles
+  // Model-normalized strut radius, exactly as the solver set it (never recomputed or clamped):
+  // 1 model unit corresponds to cell_size_mm / 2, so radius_model = strut_radius_mm / (cell_size_mm / 2)
+  const strutRadius = modelRadius(lattice)
 
   return {
     struts,
     nodes,
     bounds: {
-      min: [minVal, minVal, minVal],
-      max: [maxVal, maxVal, maxVal],
-      size: [sizeVal, sizeVal, sizeVal],
+      min: [-tilesX, -tilesY, -tilesZ],
+      max: [tilesX, tilesY, tilesZ],
+      size: [2 * tilesX, 2 * tilesY, 2 * tilesZ],
     },
     strutRadius,
   }
 }
 
+
+
+/** Strut radius in model units (the cell side is 2 units): radius_mm / (cell_mm / 2). */
+export function modelRadius(lattice: Lattice): number {
+  return (2 * lattice.strut_radius_mm) / lattice.cell_size_mm
+}
+
+/**
+ * Relative density by the PERIODIC count: a strut on the +1 face of the cell is the same strut as on the -1 face
+ * and is counted once, so wrap every coordinate of +1 to -1 before de-duplicating. The naive mirror-and-merge
+ * count (what the viewer draws for tiling) counts face struts twice and overstates density by 9% to 118%.
+ * rho = pi r^2 sum(L) / V  with V = 8 model units cubed and r in model units.
+ */
+export function periodicRelativeDensity(lattice: Lattice): number {
+  const wrap = (v: number) => (Math.abs(v - 1) < 1e-6 ? -1 : v)
+  const key = (p: number[]) => p.map((v) => wrap(v).toFixed(5)).join(',')
+  const seen = new Set<string>()
+  let total = 0
+  for (const [i, j] of lattice.edges) {
+    const a = lattice.nodes[i]
+    const b = lattice.nodes[j]
+    if (!a || !b) continue
+    for (const sx of [1, -1]) {
+      for (const sy of [1, -1]) {
+        for (const sz of [1, -1]) {
+          const p = [sx * a[0], sy * a[1], sz * a[2]]
+          const q = [sx * b[0], sy * b[1], sz * b[2]]
+          const len = Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2])
+          if (len < 1e-5) continue
+          const k = [key(p), key(q)].sort().join('|')
+          if (seen.has(k)) continue
+          seen.add(k)
+          total += len
+        }
+      }
+    }
+  }
+  const r = modelRadius(lattice)
+  return (Math.PI * r * r * total) / 8
+}
+
+/** The naive count: mirror and merge identical coordinates only (what tiling draws). For comparison in tests. */
+export function naiveRelativeDensity(lattice: Lattice): number {
+  const cell = buildTiledLattice(lattice, 1)
+  const total = cell.struts.reduce((sum, s) => sum + s.length, 0)
+  const r = modelRadius(lattice)
+  return (Math.PI * r * r * total) / 8
+}
