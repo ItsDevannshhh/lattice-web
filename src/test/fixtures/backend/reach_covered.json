@@ -32,5 +32,6 @@
     "strength_max_mpa": 15.97
   },
   "message": "A stored lattice is within 10% of this target. The search should match quickly.",
-  "warnings": []
+  "warnings": [],
+  "conflict": null
 }

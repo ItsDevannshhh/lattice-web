@@ -7218,7 +7218,7 @@
   ],
   "candidates": [
    {
-    "id": "j_912a7584_d_ac28fdf7",
+    "id": "j_bc20ffb4_d_ac28fdf7",
     "rank": 1,
     "match_error_pct": 5.59,
     "matches_targets": false,
@@ -7502,13 +7502,14 @@
       "z": "yield"
      }
     },
+    "source": "generated",
     "mass_estimate": true,
     "warnings": [
      "Closest design, not a match: worst target is off by 5.59%."
     ]
    },
    {
-    "id": "j_912a7584_d_7909294d",
+    "id": "j_bc20ffb4_d_7909294d",
     "rank": 2,
     "match_error_pct": 6.86,
     "matches_targets": false,
@@ -7804,13 +7805,14 @@
       "z": "yield"
      }
     },
+    "source": "generated",
     "mass_estimate": true,
     "warnings": [
      "Closest design, not a match: worst target is off by 6.86%."
     ]
    },
    {
-    "id": "j_912a7584_d_afc7df6b",
+    "id": "j_bc20ffb4_d_afc7df6b",
     "rank": 3,
     "match_error_pct": 7.94,
     "matches_targets": false,
@@ -8106,13 +8108,14 @@
       "z": "yield"
      }
     },
+    "source": "generated",
     "mass_estimate": true,
     "warnings": [
      "Closest design, not a match: worst target is off by 7.94%."
     ]
    },
    {
-    "id": "j_912a7584_d_dd9474cc",
+    "id": "j_bc20ffb4_d_dd9474cc",
     "rank": 4,
     "match_error_pct": 8.18,
     "matches_targets": false,
@@ -8400,13 +8403,14 @@
       "z": "yield"
      }
     },
+    "source": "generated",
     "mass_estimate": true,
     "warnings": [
      "Closest design, not a match: worst target is off by 8.18%."
     ]
    },
    {
-    "id": "j_912a7584_d_e061a611",
+    "id": "j_bc20ffb4_d_e061a611",
     "rank": 5,
     "match_error_pct": 8.57,
     "matches_targets": false,
@@ -8670,6 +8674,7 @@
       "z": "yield"
      }
     },
+    "source": "generated",
     "mass_estimate": true,
     "warnings": [
      "Closest design, not a match: worst target is off by 8.57%."

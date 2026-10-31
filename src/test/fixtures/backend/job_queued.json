@@ -1,5 +1,5 @@
 {
-  "job_id": "j_19275b26",
+  "job_id": "j_9cbe0292",
   "status": "queued",
   "stage": null,
   "round": null,
@@ -10,6 +10,7 @@
   "rounds": [],
   "infeasible": false,
   "warnings": [],
+  "skipped_invalid": 0,
   "reach": {
     "level": "covered",
     "distance_pct": 0.06,

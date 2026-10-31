@@ -1,5 +1,5 @@
 {
-  "job_id": "j_b3ba445b",
+  "job_id": "j_d169d5dc",
   "status": "cancelled",
   "stage": "rank",
   "round": 1,
@@ -10,6 +10,7 @@
   "rounds": [],
   "infeasible": false,
   "warnings": [],
+  "skipped_invalid": 0,
   "reach": {
     "level": "covered",
     "distance_pct": 0.06,

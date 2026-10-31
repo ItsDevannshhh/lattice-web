@@ -28,5 +28,6 @@
     "strength_max_mpa": 45.28
   },
   "message": "No lattice can reach this: the three stiffnesses add up to 60.00 GPa, but at relative density 0.15 no lattice can exceed about 17.10 GPa in total. The closest achievable target is shown.",
-  "warnings": []
+  "warnings": [],
+  "conflict": null
 }

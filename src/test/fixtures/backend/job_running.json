@@ -1,5 +1,5 @@
 {
-  "job_id": "j_0a6f93f4",
+  "job_id": "j_8cb71c41",
   "status": "running",
   "stage": "repair",
   "round": 1,
@@ -10,6 +10,7 @@
   "rounds": [],
   "infeasible": false,
   "warnings": [],
+  "skipped_invalid": 0,
   "reach": {
     "level": "covered",
     "distance_pct": 0.06,

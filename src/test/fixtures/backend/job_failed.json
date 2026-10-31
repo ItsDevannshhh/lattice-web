@@ -10,6 +10,7 @@
   "rounds": [],
   "infeasible": false,
   "warnings": [],
+  "skipped_invalid": 0,
   "reach": null,
   "candidates": [],
   "request": null

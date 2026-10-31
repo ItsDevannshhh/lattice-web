@@ -492,6 +492,18 @@
             ],
             "description": "Properties verified by the physics solver"
           },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source",
+            "description": "generated (made by the search) or nearest_stored (a lattice from the dataset)"
+          },
           "mass_estimate": {
             "type": "boolean",
             "title": "Mass Estimate",
@@ -872,6 +884,12 @@
             "title": "Warnings",
             "description": "Plain-language warnings"
           },
+          "skipped_invalid": {
+            "type": "integer",
+            "title": "Skipped Invalid",
+            "description": "Candidates dropped because the solver result was not physical",
+            "default": 0
+          },
           "reach": {
             "anyOf": [
               {
@@ -1159,6 +1177,19 @@
             },
             "type": "array",
             "title": "Warnings"
+          },
+          "conflict": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conflict",
+            "description": "The value hardest to match, when no stored lattice is close"
           }
         },
         "type": "object",
