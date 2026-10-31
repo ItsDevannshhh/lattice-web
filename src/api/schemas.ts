@@ -1,6 +1,10 @@
 import { z } from 'zod/v4'
 import type { DesignRequest } from '@/api/types'
 
+/** The backend sends null for "not set" (stage while queued, round/k before the first round, queue_position when
+ *  not queued, ...). Accept null and hand the app undefined. */
+const opt = <T extends z.ZodType>(schema: T) => schema.nullish().transform((v) => v ?? undefined)
+
 const failureModeSchema = z.enum(['yield', 'buckling'])
 
 const perAxisNumber = z.object({
@@ -60,7 +64,10 @@ export const candidateSchema = z
     id: z.string(),
     rank: z.number(),
     match_error_pct: z.number(),
-    matches_targets: z.boolean(),
+    matches_targets: z
+      .boolean()
+      .nullish()
+      .transform((v) => v ?? false),
     rel_density: z.number(),
     mass_g: z.number(),
     lattice: latticeSchema,
@@ -77,7 +84,7 @@ const roundInfoSchema = z
   .object({
     round: z.number(),
     k: z.number(),
-    best_error_pct: z.number(),
+    best_error_pct: z.number().nullish().transform((v) => v ?? NaN),
     matched: z.boolean(),
     n_candidates: z.number(),
     round_seconds: z.number(),
@@ -89,29 +96,37 @@ export const jobSchema = z
   .object({
     job_id: z.string(),
     status: jobStatusSchema,
-    stage: jobStageSchema.optional(),
-    round: z.number().optional(),
-    k: z.number().optional(),
+    stage: opt(jobStageSchema),
+    round: opt(z.number()),
+    k: opt(z.number()),
     progress: z.number(),
-    message: z.string(),
-    rounds: z.array(roundInfoSchema).optional(),
-    infeasible: z.boolean().optional(),
-    warnings: z.array(z.string()).optional(),
-    reach: z
-      .object({ level: reachLevelSchema, distance_pct: z.number() })
-      .passthrough()
-      .optional(),
+    message: z
+      .string()
+      .nullish()
+      .transform((v) => v ?? ''),
+    rounds: opt(z.array(roundInfoSchema)),
+    infeasible: opt(z.boolean()),
+    warnings: opt(z.array(z.string())),
+    reach: opt(z.object({ level: reachLevelSchema, distance_pct: z.number() }).passthrough()),
     candidates: z.array(candidateSchema),
-    queue_position: z.number().optional(),
-    request: z.custom<DesignRequest>().optional(),
+    queue_position: opt(z.number()),
+    request: opt(z.custom<DesignRequest>()),
+    failure_reason: opt(z.string()),
   })
   .passthrough()
 
 export const jobEventSchema = z
   .object({
-    stage: jobStageSchema.optional(),
+    stage: opt(jobStageSchema),
     progress: z.number(),
-    message: z.string(),
+    message: z
+      .string()
+      .nullish()
+      .transform((v) => v ?? ''),
+    status: opt(jobStatusSchema),
+    round: opt(z.number()),
+    k: opt(z.number()),
+    queue_position: opt(z.number()),
   })
   .passthrough()
 
@@ -128,8 +143,8 @@ export const reachResponseSchema = z
     density: z.number(),
     requested: z
       .object({
-        stiffness_gpa: z.array(z.union([z.number(), z.null()])),
-        strength_mpa: z.array(z.union([z.number(), z.null()])),
+        stiffness_gpa: z.array(z.union([z.number(), z.null()])).nullable(),
+        strength_mpa: z.array(z.union([z.number(), z.null()])).nullable(),
       })
       .passthrough(),
     nearest: z
@@ -157,7 +172,7 @@ export {
 }
 
 /** Validate data against a schema. In DEV, throws on mismatch. In PROD, warns and returns raw data. */
-export function parseResponse<T>(schema: z.ZodType<T>, data: unknown, label: string): T {
+export function parseResponse<S extends z.ZodType>(schema: S, data: unknown, label: string): z.output<S> {
   const result = schema.safeParse(data)
   if (result.success) {
     return result.data
@@ -172,5 +187,5 @@ export function parseResponse<T>(schema: z.ZodType<T>, data: unknown, label: str
   }
 
   // Return raw data so the UI doesn't crash on unknown extra fields
-  return data as T
+  return data as z.output<S>
 }

@@ -1,0 +1,16 @@
+{
+  "job_id": "j_contract_failed",
+  "status": "failed",
+  "stage": null,
+  "round": null,
+  "k": null,
+  "progress": 0.3,
+  "message": "Server restarted before this job finished. Please retry.",
+  "queue_position": null,
+  "rounds": [],
+  "infeasible": false,
+  "warnings": [],
+  "reach": null,
+  "candidates": [],
+  "request": null
+}

@@ -93,7 +93,16 @@ export function extractLimits(raw: unknown): MaterialLimits | null {
     const obj = raw as Record<string, unknown>
     // Try common shapes
     if ('densities' in obj && typeof obj.densities === 'object' && obj.densities) {
-      const densities = obj.densities as Record<string, unknown>
+      // The backend sends an ARRAY: [{rel_density, stiffness_gpa:{min,median,max}, strength_mpa:{...},
+      // stiffness_sum_max_gpa, strength_max_mpa}, ...] plus top-level stiffness_max_gpa / strength_max_mpa.
+      // Older/mock shapes send an object keyed by density; both are accepted.
+      const densities = (
+        Array.isArray(obj.densities)
+          ? Object.fromEntries(
+              (obj.densities as Record<string, unknown>[]).map((d) => [String(d.rel_density), d]),
+            )
+          : obj.densities
+      ) as Record<string, unknown>
       const result: Record<string, DensityRange> = {}
       for (const [key, val] of Object.entries(densities)) {
         if (!val || typeof val !== 'object') return null
@@ -111,10 +120,17 @@ export function extractLimits(raw: unknown): MaterialLimits | null {
         }
       }
       const bounds = obj.bounds as Record<string, number> | undefined
+      const rows = Array.isArray(obj.densities) ? (obj.densities as Record<string, number>[]) : []
+      const sumMax = rows.length
+        ? Math.max(...rows.map((r) => Number(r.stiffness_sum_max_gpa) || 0))
+        : (bounds?.stiffness_sum_max_gpa ?? 0)
       return {
         densities: result,
-        stiffness_sum_max_gpa: bounds?.stiffness_sum_max_gpa ?? 0,
-        strength_max_mpa: bounds?.strength_max_mpa ?? 0,
+        stiffness_sum_max_gpa: sumMax,
+        strength_max_mpa:
+          typeof obj.strength_max_mpa === 'number'
+            ? obj.strength_max_mpa
+            : (bounds?.strength_max_mpa ?? 0),
       }
     }
     return null

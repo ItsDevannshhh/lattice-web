@@ -23,7 +23,7 @@ function openSseEvents(jobId: string, handlers: JobEventHandlers): () => void {
     try {
       const raw = JSON.parse(event.data as string) as unknown
       const parsed = parseResponse(jobEventSchema, raw, 'SSE event')
-      handlers.onEvent(parsed)
+      handlers.onEvent(parsed as unknown as JobEvent)
     } catch {
       // Ignore malformed events
     }

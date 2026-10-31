@@ -36,7 +36,7 @@ export async function getLimits(material: string): Promise<unknown> {
 
 export async function checkReach(request: DesignRequest): Promise<ReachResponse> {
   const { data } = await apiClient.post('/api/reach', request)
-  return parseResponse(reachResponseSchema, data, 'POST /api/reach')
+  return parseResponse(reachResponseSchema, data, 'POST /api/reach') as unknown as ReachResponse
 }
 
 export async function createDesign(request: DesignRequest): Promise<CreateDesignResponse> {
@@ -46,10 +46,22 @@ export async function createDesign(request: DesignRequest): Promise<CreateDesign
 
 export async function getJob(jobId: string): Promise<Job> {
   const { data } = await apiClient.get(`/api/jobs/${jobId}`)
-  return parseResponse(jobSchema, data, `GET /api/jobs/${jobId}`)
+  return parseResponse(jobSchema, data, `GET /api/jobs/${jobId}`) as unknown as Job
 }
 
 export async function getDesign(designId: string): Promise<Candidate> {
   const { data } = await apiClient.get(`/api/designs/${designId}`)
-  return parseResponse(candidateSchema, data, `GET /api/designs/${designId}`)
+  return parseResponse(candidateSchema, data, `GET /api/designs/${designId}`) as unknown as Candidate
+}
+
+export interface CancelResponse {
+  job_id: string
+  status: string
+  message?: string | null
+}
+
+/** Stop a job: a queued one at once, a running one after its current search round. Idempotent. */
+export async function cancelJob(jobId: string): Promise<CancelResponse> {
+  const { data } = await apiClient.post(`/api/jobs/${jobId}/cancel`)
+  return data as CancelResponse
 }
