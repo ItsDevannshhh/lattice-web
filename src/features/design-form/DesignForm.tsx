@@ -69,6 +69,12 @@ export function DesignForm() {
 
   const formValues = watch()
 
+  // The backend has one material today: select the first one so the dataset hints work without an extra click.
+  const firstMaterialId = materials?.[0]?.id
+  useEffect(() => {
+    if (firstMaterialId && !formValues.material) setValue('material', firstMaterialId)
+  }, [firstMaterialId, formValues.material, setValue])
+
   // Debounced request calculation for reach query (400ms)
   const [debouncedRequest, setDebouncedRequest] = useState<DesignRequest | null>(null)
   const [debouncedHash, setDebouncedHash] = useState('')

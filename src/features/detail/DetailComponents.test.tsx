@@ -98,8 +98,6 @@ describe('Detail Components', () => {
     )
 
     expect(screen.getByLabelText('Lattice wireframe preview')).toBeInTheDocument()
-    expect(
-      screen.getByText(/Placeholder preview · 3D viewer in progress/i),
-    ).toBeInTheDocument()
+    expect(screen.queryByText(/Placeholder preview/i)).not.toBeInTheDocument()
   })
 })

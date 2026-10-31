@@ -113,10 +113,6 @@ export function LatticePlaceholder({
           </g>
         )}
       </svg>
-
-      <span className="text-faint absolute bottom-2 text-[10px]">
-        Placeholder preview · 3D viewer in progress
-      </span>
     </div>
   )
 }

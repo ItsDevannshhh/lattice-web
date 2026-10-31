@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import DesignPage from '@/pages/DesignPage'
 import { renderWithProviders } from '@/test/utils'
 
@@ -12,5 +12,10 @@ describe('DesignPage', () => {
     expect(screen.getByText('Strength targets')).toBeInTheDocument()
     expect(screen.getByText('Weight & part')).toBeInTheDocument()
   })
-})
 
+  it('selects the first material by itself, so the dataset hints can run', async () => {
+    renderWithProviders(<DesignPage />)
+    await waitFor(() => expect(screen.getAllByText('Ti-6Al-4V').length).toBeGreaterThan(0), { timeout: 3000 })
+    expect(screen.queryByText('Choose a material')).not.toBeInTheDocument()
+  })
+})
