@@ -1,73 +1,46 @@
-# React + TypeScript + Vite
+# Lattice Designer: web app
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + TypeScript + Vite + react-three-fiber. Talks to the FastAPI backend in the repo root (`server/`).
 
-Currently, two official plugins are available:
+## Run it
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+From the repo root (starts the API, waits for it to be ready, then starts this app):
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```
+.\scripts\dev.ps1            # real models, GPU laptop
+.\scripts\dev.ps1 -Mock      # no GPU: the API replays stored real runs and the five stored demo targets
 ```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+By hand: `npm ci`, then `npm run dev` (real backend at `VITE_API_URL`, default `http://localhost:8000`) or
+`npm run dev:mock` (no backend: the app replays stored real backend output in the browser).
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+**Real mode is the default** (`.env`: `VITE_USE_MOCK=false`). The implant tab is hidden in real mode
+(`VITE_ENABLE_IMPLANT=false`) because the implant backend does not exist yet; it only works in `dev:mock`.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Checks
+
 ```
+npm run typecheck   # tsc -b --noEmit
+npm run lint        # eslint (13 warnings: react-refresh exports and React Compiler on react-hook-form's watch())
+npm run test:run    # vitest, mock layer
+npm run build
+```
+
+## Contract with the backend
+
+The backend's real responses are exported by `python scripts/export_contract_fixtures.py` (run from the repo root) into
+`src/test/fixtures/backend/` and `src/mocks/fixtures/real/`. `src/api/contract.test.ts` feeds every one of them, plus
+`demo/` and `mock/` from the repo root, through the zod schemas in `src/api/schemas.ts`. Mock mode replays the files in
+`src/mocks/fixtures/real/`: never edit them by hand, regenerate them. Regenerate after any backend schema change.
+
+Known shape rules (the backend sends `null` for "not set"; the schemas turn it into `undefined`):
+`stage`, `round`, `k`, `queue_position`, `reach`, `request`, `rounds[].best_error_pct`, `message`, `matches_targets`.
+
+## Layout
+
+`src/api` client, schemas, events (SSE with polling fallback) · `src/features` design form, job, results, detail ·
+`src/components/LatticeViewer` 3D viewer and tiling · `src/lib/stl.ts` binary STL export (periodic merge, clipped to the block,
+8/12-sided struts, solver radius exactly) · `src/mocks` mock layer.
+
+Validate an exported STL: `python scripts/validate_stl.py design.stl --expect-size-mm 40 40 40 --size-tol-mm 3.5`
+(from the repo root).
