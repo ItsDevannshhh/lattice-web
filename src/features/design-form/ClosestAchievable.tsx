@@ -37,7 +37,7 @@ export function ClosestAchievable({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="font-semibold text-text">Nearest achievable target</span>
-          <SourceTag source={isAdjusted ? 'adjusted' : 'predicted'} />
+          <SourceTag source={isAdjusted ? 'adjusted' : 'stored'} />
         </div>
         <div>
           {isAdjusted ? (

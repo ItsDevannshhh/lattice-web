@@ -1,7 +1,14 @@
 import { cn } from '@/lib/cn'
 import { Tooltip } from '@/components/ui/tooltip'
 
-export type SourceKind = 'requested' | 'adjusted' | 'predicted' | 'verified' | 'estimate' | 'automatic'
+export type SourceKind =
+  | 'requested'
+  | 'adjusted'
+  | 'predicted'
+  | 'verified'
+  | 'stored'
+  | 'estimate'
+  | 'automatic'
 
 const SOURCE_CONFIG: Record<SourceKind, { label: string; tooltip: string; className: string }> = {
   requested: {
@@ -23,6 +30,12 @@ const SOURCE_CONFIG: Record<SourceKind, { label: string; tooltip: string; classN
     label: 'Verified',
     tooltip: 'Recomputed by the physics solver. This is the authoritative value.',
     className: 'bg-success/15 text-success',
+  },
+  stored: {
+    label: 'Stored lattice',
+    tooltip:
+      'Solver-computed values of the nearest lattice already in the dataset. A suggestion for your target, not a result for your request.',
+    className: 'bg-success/10 text-success',
   },
   estimate: {
     label: 'Estimate',
