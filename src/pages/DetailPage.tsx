@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useJob, useCandidateFromJob } from '@/hooks/useJob'
 import { useDesign } from '@/hooks/useDesign'
 import { loadRequest } from '@/lib/storage'
@@ -17,6 +17,8 @@ import type { Candidate } from '@/api/types'
 export default function DetailPage() {
   const { jobId, designId } = useParams<{ jobId: string; designId: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const fromImplant = searchParams.get('fromImplant')
 
   // Try from job cache first
   const { data: candidateFromJob } = useCandidateFromJob(jobId!, designId!)
@@ -32,7 +34,7 @@ export default function DetailPage() {
   })
 
   const candidate: Candidate | undefined = candidateFromJob ?? candidateFromApi
-  const request = useMemo(() => loadRequest(jobId!), [jobId])
+  const request = useMemo(() => job?.request ?? loadRequest(jobId!), [job, jobId])
 
   const [tiles, setTiles] = useState(1)
   const [renderMode, setRenderMode] = useState<'solid' | 'wireframe'>('solid')
@@ -43,16 +45,17 @@ export default function DetailPage() {
     const handleKey = (e: KeyboardEvent) => {
       if (!job || !candidate) return
       const idx = job.candidates.findIndex((c) => c.id === candidate.id)
+      const implantParam = fromImplant ? `?fromImplant=${fromImplant}` : ''
       if (e.key === 'ArrowLeft' && idx > 0) {
-        navigate(designPath(jobId!, job.candidates[idx - 1].id))
+        navigate(designPath(jobId!, job.candidates[idx - 1].id) + implantParam)
       }
       if (e.key === 'ArrowRight' && idx < job.candidates.length - 1) {
-        navigate(designPath(jobId!, job.candidates[idx + 1].id))
+        navigate(designPath(jobId!, job.candidates[idx + 1].id) + implantParam)
       }
     }
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
-  }, [job, candidate, jobId, navigate])
+  }, [job, candidate, jobId, fromImplant, navigate])
 
   useEffect(() => {
     if (candidate) {
@@ -83,8 +86,10 @@ export default function DetailPage() {
       <ErrorState
         title="Design not found"
         message={`We couldn't find design ${designId}.`}
-        onBack={() => navigate(jobPath(jobId!))}
-        backLabel="Back to results"
+        onBack={() =>
+          fromImplant ? navigate(`/implant/${fromImplant}/results`) : navigate(jobPath(jobId!))
+        }
+        backLabel={fromImplant ? 'Back to implant candidates' : 'Back to results'}
       />
     )
   }
@@ -109,6 +114,7 @@ export default function DetailPage() {
         prevId={prevId}
         nextId={nextId}
         tolerance={tolerance}
+        fromImplant={fromImplant}
       />
 
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[1fr_1fr]">

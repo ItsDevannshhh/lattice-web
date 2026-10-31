@@ -1,16 +1,22 @@
-import { useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useState, useMemo, lazy, Suspense } from 'react'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { ImplantBanner } from '@/features/implant/ImplantBanner'
 import { CandidateCard } from '@/features/results/CandidateCard'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { Segmented } from '@/components/ui/segmented'
 import { ErrorState } from '@/components/feedback/ErrorState'
 import { useImplantZones, useZoneCandidates, useAssembleImplant } from '@/hooks/useImplant'
-import { Layers, CheckCircle2, ShieldCheck, Box } from 'lucide-react'
+import { Layers, CheckCircle2, ShieldCheck, Box, Eye, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/cn'
+import { designPath, AXES, AXIS_LABELS } from '@/config/constants'
+import type { Candidate, DesignRequest } from '@/api/types'
+
+const LatticeViewer = lazy(() => import('@/components/LatticeViewer'))
 
 export default function ImplantResultsPage() {
   const { implantId } = useParams<{ implantId: string }>()
@@ -19,6 +25,12 @@ export default function ImplantResultsPage() {
   const { data: zones, isLoading: zonesLoading, error: zonesError } = useImplantZones(implantId!)
   const [selectedZoneIdx, setSelectedZoneIdx] = useState(0)
   const [choices, setChoices] = useState<Record<string, string>>({})
+
+  // 3D Inspection modal state
+  const [inspectCandidate, setInspectCandidate] = useState<Candidate | null>(null)
+  const [inspectTiles, setInspectTiles] = useState(1)
+  const [inspectRenderMode, setInspectRenderMode] = useState<'solid' | 'wireframe'>('solid')
+  const [inspectColorByAxis, setInspectColorByAxis] = useState(false)
 
   const currentZone = zones?.[selectedZoneIdx]
   const isLatticeZone = currentZone?.kind === 'lattice'
@@ -29,6 +41,31 @@ export default function ImplantResultsPage() {
   } = useZoneCandidates(implantId!, currentZone?.id ?? '')
 
   const assembleMutation = useAssembleImplant(implantId!)
+
+  // Build zone request for target comparisons
+  const zoneRequest = useMemo<DesignRequest | null>(() => {
+    if (!currentZone) return null
+    return {
+      material: 'ti64',
+      part: { size_mm: [30, 30, currentZone.thickness_mm], cell_mm: 5 },
+      target: {
+        stiffness_gpa: {
+          x: currentZone.requirement.stiffness_gpa.x.value,
+          y: currentZone.requirement.stiffness_gpa.y.value,
+          z: currentZone.requirement.stiffness_gpa.z.value,
+        },
+        strength_mpa: {
+          x: currentZone.requirement.strength_mpa.x.value,
+          y: currentZone.requirement.strength_mpa.y.value,
+          z: currentZone.requirement.strength_mpa.z.value,
+        },
+        rel_density: currentZone.requirement.density?.value ?? 0.15,
+      },
+      modes: { stiffness: 'about', strength: 'at_least', weight: 'at_most' },
+      tolerance_pct: 10,
+      n_results: 3,
+    }
+  }, [currentZone])
 
   if (zonesLoading) {
     return (
@@ -71,6 +108,8 @@ export default function ImplantResultsPage() {
       },
     })
   }
+
+  const zoneJobId = currentZone ? `j_${implantId}_${currentZone.id}` : ''
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -145,7 +184,7 @@ export default function ImplantResultsPage() {
               <div className="flex items-center gap-2 text-xs font-mono text-muted">
                 <Box className="h-4 w-4 text-accent" />
                 <span>
-                  Grid: {candidatesData.grid.cells.join('&times;')} cells ({candidatesData.grid.cell_mm} mm cell)
+                  Grid: {candidatesData.grid.cells.join('×')} cells ({candidatesData.grid.cell_mm} mm cell)
                 </span>
               </div>
             )}
@@ -180,23 +219,44 @@ export default function ImplantResultsPage() {
                         : 'border-line',
                     )}
                   >
-                    <CandidateCard candidate={cand} jobId={`zone_${currentZone.id}`} request={null} />
-                    <div className="p-3 bg-surface border-t border-line">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={isPicked ? 'primary' : 'outline'}
-                        className="w-full text-xs"
-                        onClick={() => handleSelectCandidate(cand.id)}
-                      >
-                        {isPicked ? (
-                          <>
-                            <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Selected for Zone
-                          </>
-                        ) : (
-                          'Select this candidate'
-                        )}
-                      </Button>
+                    <CandidateCard
+                      candidate={cand}
+                      jobId={`${zoneJobId}?fromImplant=${implantId}`}
+                      request={zoneRequest}
+                    />
+
+                    <div className="p-3 bg-surface border-t border-line space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="w-1/2 text-xs"
+                          onClick={() => {
+                            setInspectCandidate(cand)
+                            setInspectTiles(1)
+                          }}
+                        >
+                          <Eye className="mr-1 h-3.5 w-3.5 text-accent" />
+                          Inspect 3D
+                        </Button>
+
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={isPicked ? 'primary' : 'secondary'}
+                          className="w-1/2 text-xs"
+                          onClick={() => handleSelectCandidate(cand.id)}
+                        >
+                          {isPicked ? (
+                            <>
+                              <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Selected
+                            </>
+                          ) : (
+                            'Select'
+                          )}
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 )
@@ -224,6 +284,148 @@ export default function ImplantResultsPage() {
           Assemble Implant
         </Button>
       </div>
+
+      {/* 3D Inspection Modal */}
+      {inspectCandidate && (
+        <Dialog open={!!inspectCandidate} onOpenChange={() => setInspectCandidate(null)}>
+          <DialogContent className="max-w-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-line">
+              <DialogTitle className="text-base font-semibold">
+                3D Inspection: Candidate <span className="font-mono text-accent">{inspectCandidate.id}</span>
+              </DialogTitle>
+              <Badge variant={inspectCandidate.matches_targets ? 'success' : 'warning'}>
+                Rank #{inspectCandidate.rank} &middot; {inspectCandidate.match_error_pct.toFixed(1)}% error
+              </Badge>
+            </div>
+
+            {/* 3D Viewport */}
+            <div className="space-y-4 pt-2">
+              <div className="aspect-[4/3] rounded-lg overflow-hidden border border-line bg-surface-2">
+                <Suspense fallback={<Skeleton className="h-full w-full" />}>
+                  <LatticeViewer
+                    lattice={inspectCandidate.lattice}
+                    variant="full"
+                    tiles={inspectTiles}
+                    renderMode={inspectRenderMode}
+                    colorByAxis={inspectColorByAxis}
+                  />
+                </Suspense>
+              </div>
+
+              {/* Viewport controls */}
+              <div className="flex flex-wrap items-center justify-between gap-3 text-xs bg-surface-2/60 p-3 rounded-lg border border-line">
+                <div className="flex items-center gap-2">
+                  <label className="text-muted">Tiles:</label>
+                  <input
+                    type="range"
+                    min={1}
+                    max={5}
+                    value={inspectTiles}
+                    onChange={(e) => setInspectTiles(parseInt(e.target.value))}
+                    className="accent-accent w-20"
+                  />
+                  <span className="font-mono font-medium">{inspectTiles}</span>
+                </div>
+
+                <Segmented
+                  value={inspectRenderMode}
+                  onChange={(v) => setInspectRenderMode(v as 'solid' | 'wireframe')}
+                  options={[
+                    { value: 'solid', label: 'Solid' },
+                    { value: 'wireframe', label: 'Wire' },
+                  ]}
+                />
+
+                <label className="flex items-center gap-1.5 cursor-pointer text-muted">
+                  <input
+                    type="checkbox"
+                    checked={inspectColorByAxis}
+                    onChange={(e) => setInspectColorByAxis(e.target.checked)}
+                    className="accent-accent cursor-pointer"
+                  />
+                  Colour by axis
+                </label>
+              </div>
+
+              {/* Properties Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
+                <div className="rounded border border-line p-2 bg-surface">
+                  <div className="text-muted text-[10px]">Stiffness (GPa)</div>
+                  <div className="font-medium text-text mt-0.5">
+                    {AXES.map((a) => (
+                      <span key={a} className="mr-1.5">
+                        <span className={cn('font-semibold', `text-axis-${a}`)}>{AXIS_LABELS[a]}</span>:
+                        {inspectCandidate.verified.stiffness_gpa[a].toFixed(1)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded border border-line p-2 bg-surface">
+                  <div className="text-muted text-[10px]">Strength (MPa)</div>
+                  <div className="font-medium text-text mt-0.5">
+                    {AXES.map((a) => (
+                      <span key={a} className="mr-1.5">
+                        <span className={cn('font-semibold', `text-axis-${a}`)}>{AXIS_LABELS[a]}</span>:
+                        {inspectCandidate.verified.strength_mpa[a].toFixed(0)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded border border-line p-2 bg-surface">
+                  <div className="text-muted text-[10px]">Relative Density</div>
+                  <div className="font-medium text-text mt-0.5">
+                    {(inspectCandidate.rel_density * 100).toFixed(1)}%
+                  </div>
+                </div>
+
+                <div className="rounded border border-line p-2 bg-surface">
+                  <div className="text-muted text-[10px]">Strut Radius</div>
+                  <div className="font-medium text-text mt-0.5">
+                    {inspectCandidate.lattice.strut_radius_mm.toFixed(3)} mm
+                  </div>
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex items-center justify-between pt-2 border-t border-line">
+                <Link
+                  to={designPath(zoneJobId, inspectCandidate.id) + `?fromImplant=${implantId}`}
+                  className="text-xs text-accent hover:underline flex items-center gap-1"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  Open full engineering detail page
+                </Link>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setInspectCandidate(null)}
+                  >
+                    Close
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => {
+                      if (currentZone) {
+                        handleSelectCandidate(inspectCandidate.id)
+                        setInspectCandidate(null)
+                      }
+                    }}
+                  >
+                    <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+                    Select for this Zone
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   )
 }

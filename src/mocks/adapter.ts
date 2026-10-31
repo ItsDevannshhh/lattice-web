@@ -346,6 +346,8 @@ function getStoredJob(jobId: string): StoredJob {
 
 function findCandidate(designId: string) {
   const scenario = getMockScenario()
+
+  // 1. Check all stored mock jobs
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i)
     if (!key?.startsWith('mock:job:')) continue
@@ -355,5 +357,48 @@ function findCandidate(designId: string) {
     const found = candidates.find((c) => c.id === designId)
     if (found) return found
   }
+
+  // 2. Check all stored implant workflows
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)
+    if (!key?.startsWith('mock:implant:')) continue
+    const implantId = key.replace('mock:implant:', '')
+    try {
+      const raw = localStorage.getItem(key)
+      if (raw) {
+        const state = JSON.parse(raw)
+        const zones = state.zones || []
+        for (const zone of zones) {
+          if (zone.kind === 'lattice') {
+            const res = getMockZoneCandidates(implantId, zone.id)
+            const found = res.candidates.find((c) => c.id === designId)
+            if (found) return found
+          }
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
+  // 3. Fallback: generate deterministic candidate for the requested design ID so it never 404s
+  const fallbackReq: DesignRequest = {
+    material: 'ti64',
+    part: { size_mm: [30, 30, 30], cell_mm: 5 },
+    target: {
+      stiffness_gpa: { x: 8, y: 8, z: 12 },
+      strength_mpa: { x: 80, y: 80, z: 100 },
+      rel_density: 0.15,
+    },
+    modes: { stiffness: 'about', strength: 'at_least', weight: 'at_most' },
+    tolerance_pct: 10,
+    n_results: 5,
+  }
+  const fallbackCandidates = generateCandidates(designId, fallbackReq, 'success')
+  const matched = fallbackCandidates[0]
+  if (matched) {
+    return { ...matched, id: designId }
+  }
+
   return null
 }

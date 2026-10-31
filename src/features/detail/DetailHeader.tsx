@@ -12,15 +12,26 @@ interface DetailHeaderProps {
   prevId: string | null
   nextId: string | null
   tolerance: number
+  fromImplant?: string | null
 }
 
-export function DetailHeader({ candidate, jobId, prevId, nextId, tolerance }: DetailHeaderProps) {
+export function DetailHeader({
+  candidate,
+  jobId,
+  prevId,
+  nextId,
+  tolerance,
+  fromImplant,
+}: DetailHeaderProps) {
+  const backUrl = fromImplant ? `/implant/${fromImplant}/results` : jobPath(jobId)
+  const implantParam = fromImplant ? `?fromImplant=${fromImplant}` : ''
+
   return (
     <>
       {/* Title + nav */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <Link to={jobPath(jobId)} className="text-muted hover:text-text">
+          <Link to={backUrl} className="text-muted hover:text-text" title={fromImplant ? 'Back to implant candidates' : 'Back to results'}>
             <ChevronLeft className="h-5 w-5" />
           </Link>
           <h1 className="text-text text-xl font-semibold">
@@ -29,17 +40,22 @@ export function DetailHeader({ candidate, jobId, prevId, nextId, tolerance }: De
           <Badge variant={candidate.match_error_pct <= tolerance ? 'success' : 'warning'}>
             #{candidate.rank} · {fmtPct(candidate.match_error_pct)} error
           </Badge>
+          {fromImplant && (
+            <Badge variant="neutral" className="text-xs">
+              Implant Zone Candidate
+            </Badge>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {prevId && (
-            <Link to={designPath(jobId, prevId)}>
+            <Link to={designPath(jobId, prevId) + implantParam}>
               <Button variant="ghost" size="sm" aria-label="Previous design">
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             </Link>
           )}
           {nextId && (
-            <Link to={designPath(jobId, nextId)}>
+            <Link to={designPath(jobId, nextId) + implantParam}>
               <Button variant="ghost" size="sm" aria-label="Next design">
                 <ArrowRight className="h-4 w-4" />
               </Button>
@@ -50,15 +66,31 @@ export function DetailHeader({ candidate, jobId, prevId, nextId, tolerance }: De
 
       {/* Breadcrumb */}
       <nav className="text-muted flex items-center gap-1.5 text-xs">
-        <Link to="/" className="hover:text-accent">
-          Design
-        </Link>
-        <span>›</span>
-        <Link to={jobPath(jobId)} className="hover:text-accent font-mono">
-          {jobId}
-        </Link>
-        <span>›</span>
-        <span className="text-accent font-mono">{candidate.id}</span>
+        {fromImplant ? (
+          <>
+            <Link to="/implant" className="hover:text-accent">
+              Implant
+            </Link>
+            <span>›</span>
+            <Link to={`/implant/${fromImplant}/results`} className="hover:text-accent font-mono">
+              Zone Candidates
+            </Link>
+            <span>›</span>
+            <span className="text-accent font-mono">{candidate.id}</span>
+          </>
+        ) : (
+          <>
+            <Link to="/" className="hover:text-accent">
+              Design
+            </Link>
+            <span>›</span>
+            <Link to={jobPath(jobId)} className="hover:text-accent font-mono">
+              {jobId}
+            </Link>
+            <span>›</span>
+            <span className="text-accent font-mono">{candidate.id}</span>
+          </>
+        )}
       </nav>
     </>
   )
